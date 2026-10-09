@@ -72,7 +72,7 @@
       label: One command
       binary: claude
       template: "claude mcp add --transport http --scope user {name} {url}"
-      note: Then run /mcp in a session to sign in. --scope user makes it available in every project.
+      note: "Then run /mcp in a session to sign in. --scope user makes it available in every project. To have Claude Code leave memory notes on its own, add the Khala plugin: claude plugin install khala --marketplace shuiandy/khala."
       confidence: verified
     - type: file
       label: Project file
@@ -87,14 +87,14 @@
       binary: claude
       needs_token: true
       template: "claude mcp add --transport http --scope user {name} {url} --header \"Authorization: Bearer {token}\""
-      note: With a token set, Claude Code does not fall back to signing in if the token stops working.
+      note: "With a token set, Claude Code does not fall back to signing in if the token stops working. To have Claude Code leave memory notes on its own, add the Khala plugin: claude plugin install khala --marketplace shuiandy/khala."
       confidence: verified
     - type: command
       label: On this computer
       local: true
       binary: claude
       template: "claude mcp add --transport stdio --scope user {name} -- {khala} --env {env} serve --stdio"
-      note: Claude Code starts Khala itself; there is nothing to sign in to.
+      note: "Claude Code starts Khala itself; there is nothing to sign in to. To have Claude Code leave memory notes on its own, add the Khala plugin: claude plugin install khala --marketplace shuiandy/khala."
       confidence: verified
 
 - id: chatgpt

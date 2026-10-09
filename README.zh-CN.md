@@ -34,7 +34,8 @@ Khala 是自托管的共享长期记忆，给你和团队用的各种 AI agent �
 - **有上限的 agent。** 每个连上来的客户端都是某个人的 agent。它的权限是这个人的权限再收窄到 agent 自己的
   上限，可以在一个地方吊销它或撤销它做过的改动。
 - **先记笔记，审核后再成记录。** agent 在任务结束时往收件箱里记笔记。之后任何 agent 都能把笔记整合成记录，
-  结果变成提案等人批准（也可以给某个分类开自动通过）。互相矛盾的内容变成冲突，由人裁决。
+  结果变成提案等人批准（也可以给某个分类开自动通过）。互相矛盾的内容变成冲突，由人裁决。Claude Code 插件会
+  提醒 Claude 主动记笔记。
 - **不用密码的强登录。** passkey 为主，TOTP 和恢复码作后备，第一次用邮件验证码进门。OAuth 同意页绑定在
   完成登录的那个浏览器上。
 - **从头到尾都是 Git。** 每次改动都是一个提交，agent 和理由写在提交尾注里。仓库的本地克隆可以当镜像，
@@ -78,7 +79,8 @@ Khala 是自托管的共享长期记忆，给你和团队用的各种 AI agent �
 - **按语义查找。** Mem0、Zep、Graphiti、Basic Memory、Supermemory 和 Cognee 都把语义搜索和关键词结合起来，好几家还有
   图遍历和重排。Khala 的关键词搜索找不到换了说法的同一件事；它靠 agent 读简短的索引，这对几千条整理过的记录够用，
   对上百万条对话碎片不行。
-- **不用开口就能记。** 它们从对话里自动抽取记忆。Khala 靠 agent 主动记笔记，它的 instructions 和 prompts 会要求 agent 这么做。
+- **不用开口就能记。** 它们从每段对话里自动抽取记忆。Khala 靠 agent 记笔记：instructions 会要求 agent 这么做，
+  Claude Code 插件也会在一段工作之后提醒 Claude，但记什么仍由 agent 决定。
 - **记忆的种类更多。** 带有效期的事实（Zep、Graphiti）、导入文档和其他数据源（Supermemory、Cognee、Zep）、公开的基准测试。
 - **更细或托管的权限控制。** Cognee 有带租户的数据集访问列表；Zep 有 SSO 和针对 agent 的策略。Khala 没有 SSO，
   管理员能看到全部数据。
@@ -273,6 +275,20 @@ Zed、goose、Hermes、opencode、Cline、Kiro、Devin Desktop、LM Studio、Jun
 - **桥接。** `khala bridge https://your-host/mcp` 让只能启动本地程序的客户端连上远程服务，环境变量里放 `KHALA_TOKEN`。
 - **本地。** `khala serve --stdio` 在本机用本地数据目录给一个人用，不需要服务器，也不用登录；
   `khala connect 客户端 --local` 负责配好它。
+
+### Claude Code 不用开口就记笔记
+
+服务会要求 agent 在任务结束时记笔记，但 agent 经常忘。Claude Code 可以装 Khala 插件来提醒它：
+
+```sh
+claude plugin install khala --marketplace shuiandy/khala
+```
+
+做了一段工作之后（每次工具调用算 1，你发的每条消息算 3，默认满 15），Claude 结束一轮时，插件会让它回顾一下，
+把值得保留的东西用 `memory_note` 记下来；记什么、记不记由 Claude 判断，记过之后重新计数。这些笔记进收件箱，
+和其他笔记一样要经过审核，所以记错的或被注入的内容不会自己变成记录。工作量可以在安装时设置
+（`--config checkpoint_every=30`，设成 `0` 就关掉提醒），以后也可以在 `/plugin` 里改。插件只读本机上这次会话对话记录里新增的部分，自己不往任何
+地方发数据，需要 `PATH` 里有 `python3`。源码在 [`integrations/claude-code`](integrations/claude-code)。
 
 服务通过 MCP instructions 告诉 agent 怎么用记忆：任务开始时查相关分类的索引，只读真正相关的几条记录，结束时记一条笔记。
 工具有 `memory_scopes`、`memory_index`、`memory_search`、`memory_read`、`memory_history`、`memory_note`、

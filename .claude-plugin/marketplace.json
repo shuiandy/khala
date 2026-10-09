@@ -1,0 +1,12 @@
+{
+  "name": "khala",
+  "description": "Plugins that connect AI clients to Khala, a self-hosted shared memory for agents",
+  "owner": {"name": "Andy Hu", "url": "https://github.com/shuiandy/khala"},
+  "plugins": [
+    {
+      "name": "khala",
+      "source": "./integrations/claude-code",
+      "description": "Reminds Claude Code to leave Khala memory notes after a stretch of work"
+    }
+  ]
+}

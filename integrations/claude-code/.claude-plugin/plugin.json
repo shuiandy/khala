@@ -1,0 +1,19 @@
+{
+  "name": "khala",
+  "displayName": "Khala memory",
+  "description": "Reminds Claude Code to leave Khala memory notes after a stretch of work, so what it learns reaches the inbox without being asked",
+  "author": {"name": "Andy Hu", "url": "https://github.com/shuiandy/khala"},
+  "homepage": "https://github.com/shuiandy/khala#notes-from-claude-code-without-asking",
+  "repository": "https://github.com/shuiandy/khala",
+  "license": "Apache-2.0",
+  "keywords": ["memory", "mcp", "khala"],
+  "userConfig": {
+    "checkpoint_every": {
+      "type": "number",
+      "title": "Work between reminders",
+      "description": "How much work passes before Claude is reminded to leave notes: each tool call counts 1 and each message you send counts 3. 0 turns the reminders off.",
+      "default": 15,
+      "min": 0
+    }
+  }
+}

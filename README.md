@@ -37,7 +37,8 @@ The name comes from the Khala of StarCraft's protoss, the sacred link that joins
   narrowed by the agent's own ceiling, and it can be revoked or have its changes undone in one place.
 - **Notes first, records after review.** Agents leave notes in an inbox at the end of a task. Any agent can later
   consolidate notes into records; the result becomes a proposal a person approves (or a scope can opt into
-  automatic approval). Contradictions become conflicts for a person to settle.
+  automatic approval). Contradictions become conflicts for a person to settle. A Claude Code plugin reminds Claude
+  to leave notes without being asked.
 - **Strong sign-in without passwords.** Passkeys first, TOTP and recovery codes as backup, email codes to get
   started. OAuth consent is bound to the browser that signed in.
 - **Git all the way down.** Every change is a commit with the agent and its reason in the trailers. A local
@@ -89,8 +90,9 @@ index. Neither is better in general; they answer different questions.
   search with keywords, several add graph traversal and rerankers. Khala's keyword search misses a record that
   says the same thing in other words; it relies on agents reading short indexes instead, which works for a few
   thousand curated records, not for millions of conversation fragments.
-- **Capturing without asking.** They extract memories from conversations automatically. Khala relies on agents
-  leaving notes, which its instructions and prompts ask them to do.
+- **Capturing without asking.** They extract memories from every conversation automatically. Khala relies on
+  agents leaving notes; its instructions ask them to, and the Claude Code plugin reminds Claude after a stretch of
+  work, but the agent still chooses what to note.
 - **More kinds of memory.** Facts with validity periods (Zep, Graphiti), ingestion of documents and other sources
   (Supermemory, Cognee, Zep), published benchmarks.
 - **Finer or managed access control.** Cognee has per-dataset access lists with tenants; Zep has SSO and policies
@@ -307,6 +309,23 @@ How clients sign in:
   remote server, with `KHALA_TOKEN` in its environment.
 - **Local.** `khala serve --stdio` serves one person on this computer from a local data directory, with no
   server and no sign-in; `khala connect CLIENT --local` sets it up.
+
+### Notes from Claude Code without asking
+
+Agents are asked to leave notes at the end of a task, and they often forget. For Claude Code, the Khala plugin
+reminds it:
+
+```sh
+claude plugin install khala --marketplace shuiandy/khala
+```
+
+After a stretch of work (each tool call counts 1, each message you send counts 3, 15 by default), when Claude
+finishes a turn, the plugin asks it to look back and leave anything worth keeping with `memory_note`; Claude
+decides what, if anything, that is, and saving memory restarts the count. The notes land in the inbox and go
+through review like any other, so a wrong or injected note never becomes a record on its own. Set the amount
+of work when installing (`--config checkpoint_every=30`, or `0` to turn the reminders off) or later in `/plugin`. The plugin reads
+only the new part of the session's transcript on this computer, sends nothing anywhere itself, and needs
+`python3` on the `PATH`. Its source is in [`integrations/claude-code`](integrations/claude-code).
 
 The server's MCP instructions tell agents how to use the memory: look up the relevant scope's index at the start
 of a task, read only the few records that matter, and leave a note at the end. The tools are `memory_scopes`,
