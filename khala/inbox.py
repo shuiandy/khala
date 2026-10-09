@@ -359,6 +359,92 @@ class Inbox:
         self.db.audit("record.approved" if approve else "record.rejected", p.id, p.agent_id, target=name,
                       detail={"why": why[:300]} if why else "")
 
+    # ---------- Decisions a person makes: the web confirmation page and memory_decide ----------
+    def decidable(self, p):
+        """What this person can decide as p: open proposals and conflicts in scopes where they are at least a
+        maintainer and p can read, and proposed records in auto-loaded scopes they own."""
+        def ok(*scopes):
+            return all(self.reviewable(p, sc) and p.can_read(sc) for sc in scopes if sc)
+        props = [r for r in self.db.q("SELECT * FROM proposals WHERE state='open' ORDER BY created_at")
+                 if ok(r["scope"], r["old_scope"])]
+        conflicts = [c for c in self.db.q("SELECT * FROM conflicts WHERE state='open' ORDER BY created_at")
+                     if ok(c["scope"])]
+        return props, self.candidates(p), conflicts
+
+    def plan_decisions(self, p, approve, reject, keep):
+        """[(verb, kind, item)] for ids from decidable(): proposals and proposed records may be approved or
+        rejected, conflicts kept. Refuses unknown ids, an id decided twice, and scopes p cannot change."""
+        props, cands, conflicts = self.decidable(p)
+        by_id, by_name = {r["id"]: r for r in props}, {r.name: r for r in cands}
+        by_conflict = {c["id"]: c for c in conflicts}
+        plan, unknown, seen = [], [], set()
+        for verb, ids in (("approve", approve or []), ("reject", reject or []), ("keep", keep or [])):
+            for i in ids:
+                if i in seen:
+                    raise InboxError("%s appears more than once; decide each item once" % i)
+                seen.add(i)
+                if verb != "keep" and i in by_id:
+                    plan.append((verb, "proposal", by_id[i]))
+                elif verb != "keep" and i in by_name:
+                    plan.append((verb, "record", by_name[i]))
+                elif verb == "keep" and i in by_conflict:
+                    plan.append((verb, "conflict", by_conflict[i]))
+                else:
+                    unknown.append(i)
+        if unknown:
+            raise InboxError("not waiting for this person's decision, or not visible here: %s" % ", ".join(unknown))
+        if not plan:
+            raise InboxError("nothing to decide")
+        for _, kind, item in plan:
+            for sc in sorted(self.plan_scopes(kind, item)):
+                if not p.can_write(sc):
+                    raise InboxError("this agent cannot change scope '%s'" % sc)
+        return plan
+
+    @staticmethod
+    def plan_scopes(kind, item):
+        if kind == "proposal":
+            return {item["scope"], item["old_scope"]} - {None}
+        return {item.meta["scope"]} if kind == "record" else {item["scope"]}
+
+    @staticmethod
+    def plan_version(plan):
+        """Names each item's current version: what the person saw is what gets applied, or they are asked again."""
+        return "|".join("%s:%s:%s" % (verb, item.name if kind == "record" else item["id"],
+                                       item.sha if kind == "record" else item["new_blob"] if kind == "proposal"
+                                       else item["detail"][:40]) for verb, kind, item in plan)
+
+    def apply_decisions(self, p, plan, why=""):
+        why = re.sub(r"\s+", " ", why or "").strip()[:300]
+        results = []
+        for verb, kind, item in plan:
+            key = item.name if kind == "record" else item["id"]
+            try:
+                if kind == "proposal":
+                    prop = self.proposal(item["id"])
+                    if prop["state"] != "open":
+                        outcome = "already " + prop["state"]
+                    elif verb == "approve":
+                        outcome = self.approve(p, prop)
+                    else:
+                        self.reject(p, prop, why)
+                        outcome = "rejected"
+                    results.append({"id": key, "record": item["record"], "result": outcome})
+                elif kind == "record":
+                    self.settle_candidate(p, item.name, verb == "approve", why)
+                    results.append({"id": key, "record": key, "result": "approved" if verb == "approve" else "rejected"})
+                else:
+                    c = self.db.one("SELECT * FROM conflicts WHERE id=?", item["id"])
+                    if c["state"] != "open":
+                        results.append({"id": key, "record": item["record"], "result": "already " + c["state"]})
+                        continue
+                    self.resolve(p, c, "keep")
+                    results.append({"id": key, "record": item["record"], "result": "kept"})
+            except InboxError as exc:
+                results.append({"id": key, "record": item.name if kind == "record" else item["record"],
+                                "result": "not applied: %s" % exc})
+        return results
+
     def undo(self, p, prop):
         """Undo an applied consolidation. Only while the record still holds that change's result, write back the
         version from before it (or delete the record if the change created it)."""

@@ -6,6 +6,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -108,14 +109,48 @@ class DecisionTests(Base):
             self.assertFalse(self.content(result)["done"])
         self.assertEqual(self.db.one("SELECT state FROM proposals WHERE id=?", pid)["state"], "open")
 
-    def test_an_app_that_cannot_ask_gets_the_review_link(self):
+    def test_an_app_that_cannot_ask_gets_a_page_with_exactly_those_decisions(self):
         pid = self.proposal()
-        question, result = self.decide({"approve": [pid]}, caps={})
+        self.candidate()
+        question, result = self.decide({"approve": [pid], "reject": ["feedback_new.md"]}, caps={})
         self.assertIsNone(question)
         out = self.content(result)
         self.assertFalse(out["done"])
-        self.assertEqual(out["review_url"], "http://localhost/app/review")
+        url = out["confirm_url"]
+        self.assertTrue(url.startswith("http://localhost/app/review/decide?"))
         self.assertEqual(self.db.one("SELECT state FROM proposals WHERE id=?", pid)["state"], "open")
+        path = url[len("http://localhost"):]
+        self.client.cookies.clear()                             # signed out: sign in first, then back to this page
+        r = self.client.get(path, follow_redirects=False)
+        self.assertIn("next=/app/review/decide%3Fapprove%3D", r.headers["location"])
+        self.web_login(OWNER)
+        page = self.client.get(path).text
+        self.assertIn("Apply 2 decisions", page)
+        self.assertIn("project_new_finding.md", page)
+        self.assertEqual(self.db.one("SELECT state FROM proposals WHERE id=?", pid)["state"], "open")
+        version = re.search(r'name="version" value="([^"]+)"', page).group(1)
+        r = self.post("/app/review/decide", {"approve": pid, "reject": "feedback_new.md", "version": version},
+                      page=path)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("Decisions applied", r.text)
+        self.assertEqual(self.db.one("SELECT state FROM proposals WHERE id=?", pid)["state"], "approved")
+        self.assertNotIn("feedback_new.md", git(self.hub, "ls-tree", "--name-only", "main"))
+        self.assertEqual(self.client.get(path).status_code, 409)       # nothing left to apply
+
+    def test_the_page_asks_again_when_something_changed_and_others_cannot_use_it(self):
+        self.candidate()
+        path = "/app/review/decide?approve=feedback_new.md"
+        self.web_login(OWNER)
+        page = self.client.get(path).text
+        version = re.search(r'name="version" value="([^"]+)"', page).group(1)
+        changed = rec("global", name="new", status="proposed", body="edited meanwhile").replace(
+            "  status: proposed\n", "  status: proposed\n  proposed_at: 2026-10-09\n")
+        self.push("feedback_new.md", changed)
+        r = self.post("/app/review/decide", {"approve": "feedback_new.md", "version": version}, page=path)
+        self.assertIn("changed since the page was opened", r.text)
+        self.assertIn("status: proposed", git(self.hub, "show", "main:feedback_new.md"))
+        self.web_login(ALICE)
+        self.assertEqual(self.client.get(path).status_code, 409)
 
     def test_unattended_agents_cannot_decide(self):
         pid = self.proposal()

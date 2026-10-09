@@ -1362,6 +1362,47 @@ def make_routes(server, cfg, db, store, memory, mailer, flow, inbox, provider, d
                           notes_total=len(notes), by_scope=sorted(by_scope.items()), who=who, now=time.time(),
                           candidates=inbox.candidates(me))
 
+    def decision_rows(plan):
+        rows = []
+        for verb, kind, item in plan:
+            if kind == "proposal":
+                what = ("new record" if not item["base_blob"] else "move from %s" % item["old_scope"]
+                        if item["old_scope"] and item["old_scope"] != item["scope"] else "update")
+                rows.append({"verb": verb, "name": item["record"], "scope": item["scope"], "what": what,
+                             "detail": item["reason"], "href": "/app/review/proposals/" + item["id"]})
+            elif kind == "record":
+                rows.append({"verb": verb, "name": item.name, "scope": item.meta["scope"],
+                             "what": "loads in every session" if verb == "approve" else "removed",
+                             "detail": item.meta["description"], "href": "/app/records/" + item.name})
+            else:
+                rows.append({"verb": "keep", "name": item["record"] or "conflict", "scope": item["scope"],
+                             "what": "record stays, notes set aside", "detail": item["detail"],
+                             "href": "/app/review/conflicts/" + item["id"]})
+        return rows
+
+    @route("/app/review/decide", ("GET", "POST"))
+    @page
+    async def decide(ctx):
+        """A batch of decisions an agent relayed, for apps that cannot show a confirmation: the person sees exactly
+        these items and applies them with one button. The page changes nothing until that button is pressed."""
+        src = ctx.form if ctx.form is not None else ctx.request.query_params
+        lists = {k: [x for x in (src.get(k) or "").split(",") if x][:100] for k in ("approve", "reject", "keep")}
+        why = (src.get("why") or "")[:300]
+        try:
+            plan = inbox.plan_decisions(ctx.me, lists["approve"], lists["reject"], lists["keep"])
+        except InboxError as exc:
+            return ctx.render("app_message.html", status=409, title="Nothing to apply",
+                              message="%s. It may have been decided already." % str(exc).capitalize(), back="/app/review")
+        version = inbox.plan_version(plan)
+        changed = False
+        if ctx.form is not None:
+            if ctx.form.get("version") == version:
+                results = inbox.apply_decisions(ctx.me, plan, why)
+                return ctx.render("app_decide.html", rows=decision_rows(plan), results=results)
+            changed = True
+        return ctx.render("app_decide.html", rows=decision_rows(plan), version=version, why=why, changed=changed,
+                          fields={k: ",".join(v) for k, v in lists.items()})
+
     @route("/app/review/candidates", ("POST",))
     @page
     async def candidate(ctx):

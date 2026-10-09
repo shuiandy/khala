@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Confirm decisions{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div>
+    <h1>{{ 'Decisions applied' if results is defined else 'Confirm decisions' }}</h1>
+    <p class="lede">{% if results is defined %}Approved changes can be undone on the Review page for 14 days.{% else %}Your agent passed on these decisions. Nothing changes until you apply them.{% endif %}</p>
+  </div>
+</div>
+{% if changed %}<div class="card warn">Something here changed since the page was opened. Check the list again before applying.</div>{% endif %}
+<section class="panel">
+  {% for r in rows %}
+  <a class="row-link" href="{{ r.href }}">
+    <span class="tag {{ 'new' if r.verb == 'approve' else 'conflict' if r.verb == 'reject' else 'update' }}">{{ r.verb|capitalize }}</span>
+    <span class="body">
+      <span class="name">{{ r.name }}</span>
+      {% if r.detail %}<span class="desc clamp">{{ r.detail }}</span>{% endif %}
+      <span class="meta"><span class="scope">{{ r.scope }}</span><span>{{ r.what }}</span>{% if results is defined %}<span class="chip">{{ results[loop.index0].result }}</span>{% endif %}</span>
+    </span>
+  </a>
+  {% endfor %}
+</section>
+{% if results is defined %}
+<p><a href="/app/review">Back to Review</a></p>
+{% else %}
+<form method="post" class="card row">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="version" value="{{ version }}">
+  <input type="hidden" name="why" value="{{ why }}">
+  {% for k, v in fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <button>Apply {{ rows|length }} decision{{ 's' if rows|length != 1 }}</button>
+  <a href="/app/review" class="small">Not now</a>
+</form>
+{% endif %}
+{% endblock %}

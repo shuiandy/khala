@@ -367,14 +367,7 @@ def create_app(cfg: Config | None = None, mailer=None, local=None):
 
     # ---------- Decisions that wait for a person ----------
     def decidable(p):
-        """What this person can decide through this agent: open proposals and conflicts in scopes where they are at
-        least a maintainer and the agent can read, and proposed records in auto-loaded scopes they own."""
-        def ok(*scopes):
-            return all(inbox.reviewable(p, sc) and p.can_read(sc) for sc in scopes if sc)
-        props = [r for r in db.q("SELECT * FROM proposals WHERE state='open' ORDER BY created_at")
-                 if ok(r["scope"], r["old_scope"])]
-        conflicts = [c for c in db.q("SELECT * FROM conflicts WHERE state='open' ORDER BY created_at") if ok(c["scope"])]
-        return props, inbox.candidates(p), conflicts
+        return inbox.decidable(p)
 
     def can_ask(ctx):
         """Whether this connection can show the person a confirmation form (form elicitation)."""
@@ -386,34 +379,18 @@ def create_app(cfg: Config | None = None, mailer=None, local=None):
         return p.agent is not None and p.agent["kind"] == "bot"
 
     def decision_plan(p, approve, reject, keep):
-        props, cands, conflicts = decidable(p)
-        by_id, by_name, by_conflict = {r["id"]: r for r in props}, {r.name: r for r in cands}, {c["id"]: c for c in conflicts}
-        plan, unknown, seen = [], [], set()
-        for verb, ids in (("approve", approve or []), ("reject", reject or []), ("keep", keep or [])):
-            for i in ids:
-                if i in seen:
-                    raise ToolError("%s appears more than once; decide each item once" % i)
-                seen.add(i)
-                if verb != "keep" and i in by_id:
-                    plan.append((verb, "proposal", by_id[i]))
-                elif verb != "keep" and i in by_name:
-                    plan.append((verb, "record", by_name[i]))
-                elif verb == "keep" and i in by_conflict:
-                    plan.append((verb, "conflict", by_conflict[i]))
-                else:
-                    unknown.append(i)
-        if unknown:
-            raise ToolError("not waiting for this person's decision, or not visible to this agent: %s; call memory_review"
-                            % ", ".join(unknown))
-        if not plan:
-            raise ToolError("nothing to decide: pass ids from memory_review in approve, reject or keep")
-        for _, kind, item in plan:
-            scopes = ({item["scope"], item["old_scope"]} if kind == "proposal" else
-                      {item.meta["scope"]} if kind == "record" else {item["scope"]}) - {None}
-            for sc in scopes:
-                if not p.can_write(sc):
-                    raise ToolError("this agent cannot change scope '%s'; decide on the web: %s/app/review" % (sc, cfg.issuer))
-        return plan
+        try:
+            return inbox.plan_decisions(p, approve, reject, keep)
+        except InboxError as exc:
+            raise ToolError("%s; call memory_review" % exc if "not waiting" in str(exc) or "nothing" in str(exc)
+                            else "%s; decide on the web: %s/app/review" % (exc, cfg.issuer))
+
+    def confirm_link(approve, reject, keep, reason):
+        """The web page that lists exactly these decisions with one button, for apps without a confirmation form."""
+        q = {k: ",".join(v) for k, v in (("approve", approve), ("reject", reject), ("keep", keep)) if v}
+        if reason:
+            q["why"] = reason[:300]
+        return cfg.issuer + "/app/review/decide?" + urlencode(q)
 
     def describe(p, plan):
         """The confirmation the person sees. Built by the server, not the model, and it names each item's current
@@ -477,7 +454,8 @@ def create_app(cfg: Config | None = None, mailer=None, local=None):
             "how": ("Approve or reject proposals and records with memory_decide(approve=[ids], reject=[ids]); settle a "
                     "conflict by keeping the record with keep=[conflict ids], or on the web to send the notes back "
                     "with guidance. " + ("The person's app will ask them to confirm." if here else
-                                         "This app cannot ask the person to confirm, so send them to review_url."))}
+                                         "This app cannot ask the person to confirm, so memory_decide returns a "
+                                         "link to a page with exactly those decisions and one button."))}
 
     @server.tool(annotations=ToolAnnotations(destructiveHint=True))
     def memory_decide(approve: list[str] | None = None, reject: list[str] | None = None, keep: list[str] | None = None,
@@ -489,39 +467,13 @@ def create_app(cfg: Config | None = None, mailer=None, local=None):
         p = who()
         if not isinstance(confirmation, AcceptedElicitation) or isinstance(confirmation.data, str):
             if isinstance(confirmation, AcceptedElicitation):        # the app has no confirmation form
-                return {"done": False, "review_url": cfg.issuer + "/app/review",
-                        "message": "This app cannot ask the person to confirm. Give them the link: one click there."}
+                return {"done": False, "confirm_url": confirm_link(approve, reject, keep, reason),
+                        "message": "This app cannot ask the person to confirm. Give them confirm_url: it lists "
+                                   "exactly these decisions, and one click there applies them."}
             return {"done": False, "message": "The person did not confirm, so nothing changed."}
         if not confirmation.data.confirm:
             return {"done": False, "message": "The person chose not to apply these decisions; nothing changed."}
-        plan = decision_plan(p, approve, reject, keep)
-        why = re.sub(r"\s+", " ", reason or "").strip()[:300]
-        results = []
-        for verb, kind, item in plan:
-            try:
-                if kind == "proposal":
-                    prop = inbox.proposal(item["id"])
-                    if prop["state"] != "open":
-                        outcome = "already " + prop["state"]
-                    elif verb == "approve":
-                        outcome = inbox.approve(p, prop)
-                    else:
-                        inbox.reject(p, prop, why)
-                        outcome = "rejected"
-                    results.append({"id": item["id"], "record": item["record"], "result": outcome})
-                elif kind == "record":
-                    inbox.settle_candidate(p, item.name, verb == "approve", why)
-                    results.append({"id": item.name, "record": item.name,
-                                    "result": "approved" if verb == "approve" else "rejected"})
-                else:
-                    c = db.one("SELECT * FROM conflicts WHERE id=?", item["id"])
-                    if c["state"] != "open":
-                        results.append({"id": item["id"], "result": "already " + c["state"]})
-                        continue
-                    inbox.resolve(p, c, "keep")
-                    results.append({"id": item["id"], "record": item["record"], "result": "kept"})
-            except InboxError as exc:
-                results.append({"id": item["id"] if kind != "record" else item.name, "result": "not applied: %s" % exc})
+        results = inbox.apply_decisions(p, decision_plan(p, approve, reject, keep), reason or "")
         return {"done": True, "results": results,
                 "undo": "approved changes can be undone on %s/app/review for 14 days" % cfg.issuer}
 
