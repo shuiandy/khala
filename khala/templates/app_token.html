@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Bot token{% endblock %}
+{% block body %}
+<h1>Token for {{ name }}</h1>
+<div class="card">
+  <p><b>Copy it now; it is shown only once.</b> It expires in {{ days }} days. Revoke it any time on the Agents page.</p>
+  <pre>{{ token }}</pre>
+  <p class="small muted">Give the bot the MCP server <code>{{ issuer }}/mcp</code> and send this token as <code>Authorization: Bearer …</code>. Store it in the bot’s secret settings, never in a prompt or a memory record.</p>
+  <p><a class="button" href="/app/agents">Done</a></p>
+</div>
+{% endblock %}

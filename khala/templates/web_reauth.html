@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Confirm it’s you{% endblock %}
+{% block head %}<script src="/app/static/webauthn.js?v={{ js_version }}" defer></script>{% endblock %}
+{% block body %}
+<h1>Confirm it’s you</h1>
+<div class="card narrow">
+{% if error %}<p class="err">{{ error }}</p>{% endif %}
+{% if strong %}
+  <p>This action needs a fresh check.</p>
+  {% if has_passkey %}
+  <form method="post" action="/app/reauth" data-passkey-only hidden>
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
+    <button type="button" class="primary" data-passkey="login" data-options="/app/reauth/passkey/options" data-verify="/app/reauth/passkey/verify">Use my passkey</button>
+    <p class="err small" data-passkey-status role="status"></p>
+  </form>
+  {% endif %}
+  {% if has_totp %}
+  <form method="post" action="/app/reauth" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
+    <label>Authenticator code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required></label>
+    <button name="action" value="totp">Confirm</button>
+  </form>
+  {% endif %}
+  <details><summary class="small">Use a recovery code</summary>
+  <form method="post" action="/app/reauth" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
+    <input name="code" autocomplete="off" placeholder="abcde-fghjk" required aria-label="Recovery code">
+    <button name="action" value="recovery">Confirm</button>
+  </form></details>
+{% elif step == "start" %}
+  <p>This action needs a fresh sign-in code. We’ll send one to <b>{{ me.email }}</b>.</p>
+  <form method="post" action="/app/reauth">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
+    <button class="primary" name="action" value="send">Email me a code</button>
+  </form>
+{% else %}
+  <p>Enter the 6-digit code sent to <b>{{ me.email }}</b>.</p>
+  <form method="post" action="/app/reauth" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ next }}">
+    <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus aria-label="Code">
+    <button class="primary" name="action" value="verify">Confirm</button>
+  </form>
+{% endif %}
+</div>
+{% endblock %}

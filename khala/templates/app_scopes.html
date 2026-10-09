@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Scopes{% endblock %}
+{% block body %}
+<h1>Scopes</h1>
+<p class="muted">A scope groups records. It is what you share with other people and what you limit an agent to.</p>
+<div class="table-wrap"><table>
+<tr><th>Scope</th><th>Owner</th><th>Your role</th><th>Records</th><th class="hide-sm"></th></tr>
+{% for s, role, n, owner in rows %}
+<tr><td><a href="/app/scopes/{{ s.id }}"><code>{{ s.id }}</code></a>{% if s.title %}<div class="small muted">{{ s.title }}</div>{% endif %}</td>
+<td class="small">{{ 'You' if role == 'owner' else (owner.name if owner else '?') }}</td>
+<td><span class="chip">{{ role }}</span></td><td><a href="/app/records?scope={{ s.id }}">{{ n }}</a></td>
+<td class="hide-sm small muted">{% if s.auto_load %}auto-loaded · never shared{% endif %}{% if s.archived_at %}<span class="warn">archived</span>{% endif %}</td></tr>
+{% else %}<tr><td colspan="5" class="empty">No scopes yet.</td></tr>{% endfor %}
+</table></div>
+
+<h2>New scope</h2>
+<div class="card">
+  {% if error %}<p class="err">{{ error }}</p>{% endif %}
+  <form method="post" action="/app/scopes" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>ID<input name="id" value="{{ form.get('id', '') }}" pattern="[a-z0-9][a-z0-9_-]*" maxlength="48" placeholder="project-x" required></label>
+    <label>Title<input name="title" value="{{ form.get('title', '') }}" maxlength="120" placeholder="Optional"></label>
+    <button class="primary">Create</button>
+  </form>
+  <p class="small muted">IDs are unique on this server and cannot be renamed. Agents write <code>scope: &lt;id&gt;</code> in a record’s frontmatter.</p>
+</div>
+{% endblock %}

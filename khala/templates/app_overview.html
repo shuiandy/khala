@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block body %}
+{% from "_icons.html" import icon %}
+{% set waiting = queue.proposals + queue.conflicts %}
+<div class="page-head">
+  <div>
+    <h1>Hello, {{ me.name }}</h1>
+    <p class="lede">{% if waiting or review_total %}{{ waiting + review_total }} item{{ 's' if waiting + review_total != 1 }} waiting on you.{% else %}Nothing is waiting on you.{% endif %} Here is what your agents have been doing.</p>
+  </div>
+  <div class="actions"><a class="button primary" href="/app/agents#connect">{{ icon('plus', 16) }}Connect agent</a></div>
+</div>
+
+{% if not strong %}
+<div class="notice warn banner">{{ icon('shield-alert') }}<span>Your account is protected only by your email. Add a passkey so an email code alone can’t sign anyone in.</span><a class="button" href="/app/security">Add a passkey</a></div>
+{% endif %}
+{% for r in reused %}
+<div class="notice err banner">{{ icon('alert') }}<span>An old sign-in token of “{{ r.name }}” was used again after it had been replaced ({{ r.n }} time{{ 's' if r.n != 1 }} this week, last {{ r.last|ago }}). Someone may hold a copy, so all its tokens were revoked and the app must sign in again. If you did not just reinstall or restore it, revoke the agent.</span><a class="button" href="/app/agents">Open agents</a></div>
+{% endfor %}
+{% for l in limited %}
+<div class="notice err banner">{{ icon('alert') }}<span>Agent “{{ l.name }}” hit the write limit {{ l.n }} time{{ 's' if l.n != 1 }} in the last day (last {{ l.last|ago }}). If that isn’t expected, look at it.</span><a class="button" href="/app/agents">Open agents</a></div>
+{% endfor %}
+{% if unnamed %}
+<div class="notice warn banner">{{ icon('agents') }}<span>{{ unnamed|length }} agent{{ 's' if unnamed|length != 1 }} carried over from before have no name yet.</span><a class="button" href="/app/agents">Name them and set what they can reach</a></div>
+{% endif %}
+
+<div class="grid">
+  <a class="card stat-card" href="/app/scopes"><span class="label">Scopes</span><span class="stat">{{ scopes|length }}</span><span class="sub">{{ scopes|sum(attribute='2') }} records you can read</span></a>
+  <a class="card stat-card" href="#approval"><span class="label">Waiting for approval</span><span class="stat">{{ review_total }}</span><span class="sub">Proposed records in scopes you maintain</span></a>
+  <a class="card stat-card" href="/app/review"><span class="label">Inbox and merges</span><span class="stat">{{ waiting }}</span><span class="sub">{{ queue.proposals }} proposed, {{ queue.conflicts }} conflicts, {{ queue.notes }} notes waiting</span></a>
+  <a class="card stat-card" href="/app/records?due=1"><span class="label">Due for review</span><span class="stat">{{ due_total }}</span><span class="sub">See records</span></a>
+</div>
+
+<div class="split">
+<div class="main-col">
+<section class="panel" id="approval">
+  <div class="panel-head"><h2>Needs your attention</h2><a class="small" href="/app/review">Open review</a></div>
+  {% if waiting %}
+  <a class="row-link" href="/app/review"><span class="tag update">Merges</span><span class="body"><span class="title">{{ queue.proposals }} proposed change{{ 's' if queue.proposals != 1 }}, {{ queue.conflicts }} conflict{{ 's' if queue.conflicts != 1 }}</span><span class="desc">Agents merged inbox notes into records; these wait for you.</span></span></a>
+  {% endif %}
+  {% for r in review %}
+  <a class="row-link" href="/app/records/{{ r.name }}"><span class="tag proposed">Proposed</span><span class="body"><span class="name">{{ r.name }}</span><span class="desc clamp">{{ r.meta.description }}</span></span><span class="end"><span class="scope">{{ r.meta.scope }}</span></span></a>
+  {% endfor %}
+  {% for r in due %}
+  <a class="row-link" href="/app/records/{{ r.name }}"><span class="tag due">Due</span><span class="body"><span class="name">{{ r.name }}</span><span class="desc">Verified {{ r.meta.verified }}{% if r.meta.review_after %}, review every {{ r.meta.review_after }}{% endif %}</span></span><span class="end"><span class="scope">{{ r.meta.scope }}</span></span></a>
+  {% endfor %}
+  {% if not waiting and not review and not due %}<div class="empty">All clear.</div>{% endif %}
+  {% if review %}<div class="panel-foot">Proposed records in auto-loaded scopes are approved by their owner, by hand in a clone of the repository.</div>{% endif %}
+  {% if due_total > due|length %}<div class="panel-foot"><a href="/app/records?due=1">All {{ due_total }} records due for review</a></div>{% endif %}
+  {% if queue.notes %}<div class="panel-foot">{{ queue.notes }} note{{ 's' if queue.notes != 1 }} in the inbox. Ask any agent to “merge the memory inbox”.</div>{% endif %}
+</section>
+</div>
+
+<div class="side-col">
+<section class="panel">
+  <div class="panel-head"><h2>Your scopes</h2><a class="small" href="/app/scopes">Manage</a></div>
+  {% if scopes %}{% set top = scopes|map(attribute='2')|max %}{% endif %}
+  {% for s, role, n in scopes %}
+  <a class="scope-row" href="/app/records?scope={{ s.id }}">
+    <span class="top"><span class="id">{{ s.id }}</span><span class="small muted">{{ role }}{% if s.auto_load %} · auto-loaded{% endif %}{% if s.archived_at %} · archived{% endif %}</span><span class="n">{{ n }}</span></span>
+    <progress class="bar" value="{{ n }}" max="{{ top or 1 }}" aria-label="{{ n }} records in {{ s.id }}"></progress>
+  </a>
+  {% else %}<div class="empty">No scopes yet.</div>{% endfor %}
+</section>
+
+{% if health %}
+<section class="card">
+  <h2 class="flush">Instance</h2>
+  <div class="status-line">
+    {% if not health.backup_configured %}<span class="dot warn"></span><span class="warn">Off-site backup has never run</span><span></span>
+    {% elif health.backup_current %}<span class="dot ok"></span><span>Backup is current</span><span class="muted">{{ health.backup_time|ago }}</span>
+    {% else %}<span class="dot warn"></span><span class="warn">Backup is behind</span><span class="muted">{{ health.backup_time|ago }}</span>{% endif %}
+  </div>
+  <div class="status-line"><span class="dot"></span><span>Head <code>{{ health.head }}</code></span><span class="muted">{{ health.head_time|ago }}</span></div>
+  <p class="small flush"><a href="/app/admin">Admin</a></p>
+</section>
+{% endif %}
+</div>
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>Last 7 days</h2><span class="small muted">{{ recent|length }} change{{ 's' if recent|length != 1 }}</span></div>
+  {% for c in recent %}
+  <div class="row-link">
+    <span class="body">
+      <span class="meta"><b class="small">{{ c.author }}</b>{% if c.agent %} <span class="chip">{{ c.agent }}</span>{% endif %}<span>{{ c.at|when }}</span></span>
+      <span>{% for f in c.files %}<a class="mono" href="/app/records/{{ f }}/commits/{{ c.sha }}">{{ f }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</span>
+    </span>
+  </div>
+  {% else %}<div class="empty">No changes you can see.</div>{% endfor %}
+</section>
+{% endblock %}

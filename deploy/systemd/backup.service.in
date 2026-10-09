@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Khala records to a Git remote
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+Environment=KHALA_ROOT=@ROOT@ KHALA_ETC=@ETC@ KHALA_REPO=@ROOT@/vault.git KHALA_DB=@ROOT@/state/khala.db
+EnvironmentFile=-@ETC@/server.env
+ExecStart=@ROOT@/app/deploy/backup.sh

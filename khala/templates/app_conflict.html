@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Conflict{% endblock %}
+{% block body %}
+<p class="small"><a href="/app/review">Review</a></p>
+<h1>Conflict{% if c.record %} with {{ c.record }}{% endif %}</h1>
+<p class="muted">Found by {{ who.accounts.get(c.account_id, '?') }}{% if c.agent_id %} via <span class="chip">{{ who.agents.get(c.agent_id, '?') }}</span>{% endif %}, {{ c.created_at|when }} · scope <code>{{ c.scope }}</code> · <span class="chip {{ 'warn' if c.state == 'open' else '' }}">{{ c.state }}</span></p>
+
+<h2>What clashes</h2>
+<pre>{{ c.detail }}</pre>
+{% if c.resolution %}<div class="notice">Resolved: {{ c.resolution }}</div>{% endif %}
+
+{% if c.state == 'open' %}
+<div class="card">
+  <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button name="action" value="keep">Keep the record as it is</button>
+  <span class="small muted">The notes are dropped.</span></form>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="small muted">Or send the notes back to the inbox with what the next agent should do
+    <textarea name="guidance" maxlength="2000" required placeholder="The note is right: the server moved to Linode in October. Update the record and keep the old address as history."></textarea></label>
+    <button class="primary" name="action" value="reopen">Send back with guidance</button>
+  </form>
+</div>
+{% endif %}
+
+{% if rec %}
+<h2>The record now</h2>
+<p class="small"><a href="/app/records/{{ rec.name }}">{{ rec.name }}</a></p>
+<pre>{{ rec.text }}</pre>
+{% endif %}
+
+<h2>The notes</h2>
+{% if hidden_sources %}<p class="small muted">{{ hidden_sources }} more source note{{ 's' if hidden_sources != 1 }} you can’t see.</p>{% endif %}
+{% for s in sources %}
+<div class="card"><div class="small muted"><a href="/app/inbox/{{ s.n.id }}">{{ s.n.id }}</a> · {{ who.accounts.get(s.n.account_id, '?') }}{% if s.n.agent_id %} · {{ who.agents.get(s.n.agent_id, '?') }}{% endif %} · {{ s.n.created_at|when }}</div>
+<pre>{{ s.text }}</pre></div>
+{% endfor %}
+{% endblock %}

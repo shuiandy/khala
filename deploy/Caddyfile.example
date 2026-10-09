@@ -1,0 +1,18 @@
+# Reverse proxy in front of the server. Replace the host name with yours (the same host as KHALA_ISSUER);
+# Caddy obtains the TLS certificate on its own.
+memory.example.com {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+	reverse_proxy 127.0.0.1:8100
+	log {
+		output file /var/log/caddy/khala.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ r.name }}{% endblock %}
+{% block body %}
+<p class="small"><a href="/app/records/{{ r.name }}">{{ r.name }}</a></p>
+<h1>Edit {{ r.name }}</h1>
+{% if error %}<div class="notice err">{{ error }}</div>{% endif %}
+<form method="post" action="/app/records/{{ r.name }}/edit">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="sha" value="{{ sha }}">
+  <textarea name="content" class="editor" spellcheck="false" required>{{ content }}</textarea>
+  <div class="row">
+    <label class="grow">Why (kept in the history)<input name="reason" maxlength="300" placeholder="Fixed the server address"></label>
+    <button class="primary">Save</button>
+    <a class="button" href="/app/records/{{ r.name }}">Cancel</a>
+  </div>
+  <p class="small muted">Change <code>scope:</code> in the frontmatter to move the record. Pinned records, and approving candidates in auto-loaded scopes, are done by hand in a clone of the repository.</p>
+</form>
+{% if current is not none %}
+<h2>Current version</h2>
+<pre>{{ current }}</pre>
+{% endif %}
+{% endblock %}

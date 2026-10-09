@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Change to {{ r.name }}{% endblock %}
+{% block body %}
+<p class="crumb"><a href="/app/records/{{ r.name }}">{{ r.name }}</a></p>
+<h1 class="file">{{ r.name }}</h1>
+<p class="muted">{{ c.at|when }} by {{ c.author }} &lt;{{ c.email }}&gt;{% if c.agent %} via <span class="chip">{{ c.agent }}</span>{% endif %} · <span class="mono">{{ c.sha[:12] }}</span></p>
+<p>{{ c.subject }}</p>
+<pre class="diff">{% for kind, line in lines %}<div class="{{ kind }}">{{ line or ' ' }}</div>{% endfor %}</pre>
+{% if can_undo %}
+<form method="post" action="/app/records/{{ r.name }}/commits/{{ c.sha }}/undo"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Undo this change</button></form>
+{% endif %}
+{% endblock %}

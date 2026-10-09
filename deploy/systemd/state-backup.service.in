@@ -1,0 +1,14 @@
+[Unit]
+Description=Encrypted off-site snapshot of the Khala state
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+Group=@USER@
+UMask=0077
+PrivateTmp=yes
+Environment=KHALA_ROOT=@ROOT@ KHALA_ETC=@ETC@ KHALA_REPO=@ROOT@/vault.git KHALA_DB=@ROOT@/state/khala.db KHALA_SECRET_KEY_FILE=@ETC@/secret.key
+EnvironmentFile=-@ETC@/server.env
+ExecStart=@ROOT@/app/deploy/state-backup.sh

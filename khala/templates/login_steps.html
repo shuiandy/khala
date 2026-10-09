@@ -1,0 +1,64 @@
+{% extends "auth_base.html" %}
+{% block head %}<script src="/app/static/webauthn.js?v={{ js_version }}" defer></script>{% endblock %}
+{% block body %}
+{% from "_icons.html" import icon %}
+{% macro hidden() %}{% for k, v in fields %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}{% endmacro %}
+{% if step == "email" %}
+<h1>Sign in to shared memory</h1>
+<p class="muted">{{ subtitle or "Use a passkey, or get a one-time code by email." }}</p>
+{% if error %}<p class="err">{{ error }}</p>{% endif %}
+<form method="post" action="{{ action }}">
+  {{ hidden() }}
+  <div data-passkey-only hidden>
+    <button type="button" class="primary" data-passkey="login" data-mode="discoverable" data-options="{{ passkey_options }}" data-verify="{{ passkey_verify }}">Sign in with a passkey</button>
+    <p class="muted small center">or get a code by email</p>
+  </div>
+  <p class="err small" data-passkey-status role="status"></p>
+  <input name="email" type="email" value="{{ email }}" placeholder="you@example.com" autocomplete="username webauthn" required>
+  <button name="action" value="send">Email me a code</button>
+</form>
+<p class="muted small">Access is by invitation. No password is ever used.</p>
+{% elif step == "code" %}
+<div class="auth-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></div>
+<h1>Check your email</h1>
+<p>If <b>{{ email }}</b> has access, a 6-digit code is on its way.</p>
+{% if error %}<p class="err">{{ error }}</p>{% endif %}
+<form method="post" action="{{ action }}">
+  {{ hidden() }}
+  <input type="hidden" name="email" value="{{ email }}">
+  <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus aria-label="Code" placeholder="000000">
+  <button class="primary" name="action" value="verify">Sign in</button>
+</form>
+<p class="muted small">Codes expire in 10 minutes.</p>
+{% else %}
+<div class="auth-icon ok">{{ icon('shield', 22) }}</div>
+<h1>One more step</h1>
+<p class="muted">{{ email }} is protected with a second factor.</p>
+{% if error %}<p class="err">{{ error }}</p>{% endif %}
+{% if has_passkey %}
+<form method="post" action="{{ action }}" data-passkey-only hidden>
+  {{ hidden() }}
+  <button type="button" class="primary" data-passkey="login" data-mode="second" data-options="{{ passkey_options }}" data-verify="{{ passkey_verify }}">Use my passkey</button>
+  <p class="err small" data-passkey-status role="status"></p>
+</form>
+{% endif %}
+{% if has_totp %}
+<form method="post" action="{{ action }}">
+  {{ hidden() }}
+  <input type="hidden" name="email" value="{{ email }}">
+  <label class="small muted" for="totp">Code from your authenticator app</label>
+  <input id="totp" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required {% if not has_passkey %}autofocus{% endif %}>
+  <button class="{{ '' if has_passkey else 'primary' }}" name="action" value="totp">Continue</button>
+</form>
+{% endif %}
+<details>
+  <summary class="small">Use a recovery code</summary>
+  <form method="post" action="{{ action }}">
+    {{ hidden() }}
+    <input type="hidden" name="email" value="{{ email }}">
+    <input name="code" autocomplete="off" placeholder="abcde-fghjk" required>
+    <button name="action" value="recovery">Continue</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

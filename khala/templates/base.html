@@ -1,0 +1,47 @@
+{% from "_icons.html" import icon, mark %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}{{ title or instance_name }}{% endblock %} · {{ instance_name }}</title>
+<link rel="icon" type="image/png" href="/app/static/khala-icon.png?v={{ icon_version }}">
+<link rel="stylesheet" href="/app/static/app.css?v={{ css_version }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+{% if me %}
+<div class="shell">
+<aside class="side">
+  <a class="brand" href="/app" aria-label="{{ instance_name }} home"><span class="mark">{{ mark() }}</span><span><b>{{ instance_name }}</b><span>Shared memory</span></span></a>
+  <nav aria-label="Primary">
+    <a href="/app" class="{{ 'on' if not nav }}"{% if not nav %} aria-current="page"{% endif %}>{{ icon('overview') }}Overview</a>
+    <a href="/app/scopes" class="{{ 'on' if nav == 'scopes' }}">{{ icon('scopes') }}Scopes</a>
+    <a href="/app/records" class="{{ 'on' if nav == 'records' }}">{{ icon('records') }}Records</a>
+    <a href="/app/review" class="{{ 'on' if nav in ('review', 'inbox') }}">{{ icon('review') }}Review</a>
+    <a href="/app/agents" class="{{ 'on' if nav == 'agents' }}">{{ icon('agents') }}Agents</a>
+    <a href="/app/audit" class="{{ 'on' if nav in ('audit', 'audit.csv') }}">{{ icon('audit') }}Audit log</a>
+    {% if me.is_admin %}<a href="/app/admin" class="{{ 'on' if nav == 'admin' }}">{{ icon('admin') }}Admin</a>{% endif %}
+  </nav>
+  <div class="spacer"></div>
+  <div class="foot">
+    <nav aria-label="Account"><a href="/app/security" class="{{ 'on' if nav == 'security' }}">{{ icon('shield') }}Security</a></nav>
+    <div class="me">
+      <span class="avatar" aria-hidden="true">{{ (me.name or me.email)[:1] }}</span>
+      <span class="who"><b>{{ me.name }}</b><span>{{ me.email }}</span></span>
+      <form class="inline" method="post" action="/app/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="signout" aria-label="Sign out" title="Sign out">{{ icon('signout', 17) }}</button></form>
+    </div>
+  </div>
+</aside>
+<div class="workspace">
+{% endif %}
+<main class="wrap">
+{% if flash %}<div class="notice" role="status">{{ flash }}</div>{% endif %}
+{% block body %}{% endblock %}
+</main>
+{% if me %}
+</div>
+</div>
+{% endif %}
+</body>
+</html>

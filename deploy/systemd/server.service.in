@@ -1,0 +1,33 @@
+[Unit]
+Description=Khala shared memory server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+Group=@USER@
+UMask=0007
+WorkingDirectory=@ROOT@
+# Where this layout keeps things; server.env overrides any of them
+Environment=KHALA_REPO=@ROOT@/vault.git KHALA_DB=@ROOT@/state/khala.db KHALA_SECRET_KEY_FILE=@ETC@/secret.key
+EnvironmentFile=@ETC@/server.env
+EnvironmentFile=-@ETC@/smtp.env
+ExecStart=@ROOT@/app/.venv/bin/khala serve --host 127.0.0.1 --port @PORT@
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=@ROOT@/vault.git @ROOT@/state
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

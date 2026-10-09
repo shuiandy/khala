@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{{ s.id }}{% endblock %}
+{% block body %}
+<p class="small"><a href="/app/scopes">Scopes</a></p>
+<h1><code>{{ s.id }}</code>{% if s.title %} {{ s.title }}{% endif %}</h1>
+<p class="muted">
+  Owned by {{ 'you' if role == 'owner' else owner.name ~ ' (' ~ owner.email ~ ')' }} ·
+  your role <span class="chip">{{ role }}</span> ·
+  <a href="/app/records?scope={{ s.id }}">{{ records }} record{{ 's' if records != 1 }}</a>
+  {% if s.auto_load %}· <span class="chip">auto-loaded</span>{% endif %}
+  {% if s.archived_at %}· <span class="chip warn">archived {{ s.archived_at|when('%Y-%m-%d') }}</span>{% endif %}
+</p>
+{% if s.description and not manage %}<div class="card">{{ s.description }}</div>{% endif %}
+
+{% if manage %}
+<h2>Settings</h2>
+<div class="card">
+<form method="post" action="/app/scopes/{{ s.id }}/settings">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <div class="row"><label class="grow">Title<input name="title" value="{{ s.title }}" maxlength="120"></label>
+  {% if role == 'owner' %}
+  <label>Review new records from
+    <select name="review_mode">
+      {% for m in review_modes %}<option value="{{ m }}" {% if s.review_mode == m %}selected{% endif %}>{{ {'off': 'nobody (off)', 'bots': 'bots only', 'all': 'every agent'}[m] }}</option>{% endfor %}
+    </select></label>
+  <label>Merged inbox notes
+    <select name="consolidation">
+      <option value="review" {% if s.consolidation == 'review' %}selected{% endif %}>wait for my approval</option>
+      <option value="auto" {% if s.consolidation == 'auto' %}selected{% endif %}>apply directly (undo in Review)</option>
+    </select></label>
+  {% endif %}</div>
+  <label class="small muted">Description: the conventions agents should follow in this scope
+  <textarea name="description" maxlength="2000">{{ s.description }}</textarea></label>
+  <label class="small muted">Local folders that map to this scope, one per line (used by clients that pick a scope by working directory)
+  <textarea name="paths" maxlength="2000" placeholder="~/Projects/example">{{ s.paths }}</textarea></label>
+  <p><button class="primary">Save</button></p>
+  {% if role == 'owner' %}<p class="small muted">Review mode is stored now and takes effect when the review queue ships.</p>{% endif %}
+</form>
+</div>
+
+<h2>Members</h2>
+{% if s.auto_load %}
+<p class="muted">This scope is loaded into every one of your sessions, so it is never shared.</p>
+{% else %}
+<div class="table-wrap"><table>
+<tr><th>Person</th><th>Role</th><th></th></tr>
+<tr><td>{{ owner.name }} <span class="small muted">{{ owner.email }}</span></td><td><span class="chip">owner</span></td><td></td></tr>
+{% for m in members %}
+<tr><td>{{ m.name }} <span class="small muted">{{ m.email }}</span>{% if m.status != 'active' %} <span class="chip err">disabled</span>{% endif %}</td>
+<td>
+  {% if role == 'owner' or m.role != 'maintainer' %}
+  <form method="post" action="/app/scopes/{{ s.id }}/members/{{ m.account_id }}" class="row flush">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <select name="role" aria-label="Role for {{ m.email }}">
+      {% for r in roles %}{% if role == 'owner' or r != 'maintainer' %}<option value="{{ r }}" {% if m.role == r %}selected{% endif %}>{{ r }}</option>{% endif %}{% endfor %}
+    </select>
+    <button name="action" value="role">Change</button>
+  </form>
+  {% else %}<span class="chip">{{ m.role }}</span>{% endif %}
+</td>
+<td>{% if role == 'owner' or m.role != 'maintainer' %}
+  <form method="post" action="/app/scopes/{{ s.id }}/members/{{ m.account_id }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><button class="link danger" name="action" value="remove">Remove</button>
+  </form>{% endif %}</td></tr>
+{% endfor %}
+</table></div>
+
+{% if invites %}
+<h3>Pending invitations</h3>
+<div class="table-wrap"><table>
+<tr><th>Email</th><th>Role</th><th>Expires</th><th></th></tr>
+{% for i in invites %}
+<tr><td>{{ i.email }}</td><td>{{ i.role }}</td><td class="nowrap">{{ i.expires_at|when('%Y-%m-%d') }}</td>
+<td><form method="post" action="/app/scopes/{{ s.id }}/invites/{{ i.token_hash }}/cancel" class="inline">
+<input type="hidden" name="csrf" value="{{ csrf }}"><button class="link danger">Cancel</button></form></td></tr>
+{% endfor %}
+</table></div>
+{% endif %}
+
+{% if not s.archived_at %}
+<h3>Add someone</h3>
+<div class="card">
+<form method="post" action="/app/scopes/{{ s.id }}/members" class="row">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <label class="grow">Email<input name="email" type="email" required placeholder="person@example.com"></label>
+  <label>Role<select name="role">
+    <option value="viewer">viewer: read</option>
+    <option value="editor" selected>editor: read and write</option>
+    {% if role == 'owner' %}<option value="maintainer">maintainer: also manages members</option>{% endif %}
+  </select></label>
+  <button class="primary">Share</button>
+</form>
+<p class="small muted">People who already have an account get access right away and an email. Others get an invitation that expires in 7 days.</p>
+</div>
+{% endif %}
+{% endif %}
+{% endif %}
+
+{% if role == 'owner' and not s.archived_at %}
+<h2>Loading</h2>
+<div class="card">
+  <p class="small muted">{% if s.auto_load %}Agents load this scope at the start of every session. It is never shared, and records agents add to it start as proposed until you approve them.{% else %}Turn this on for the few things every agent should know in every session, such as your preferences. Auto-loaded scopes are never shared.{% endif %}</p>
+  <form method="post" action="/app/scopes/{{ s.id }}/auto-load" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button>{{ 'Stop loading it every session' if s.auto_load else 'Load it in every session' }}</button>
+  </form>
+</div>
+{% endif %}
+
+{% if role == 'owner' and not s.auto_load %}
+<h2>Ownership</h2>
+<div class="card">
+  <form method="post" action="/app/scopes/{{ s.id }}/archive" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="{{ '' if s.archived_at else 'danger' }}">{{ 'Restore scope' if s.archived_at else 'Archive scope' }}</button>
+  </form>
+  <form method="post" action="/app/scopes/{{ s.id }}/transfer" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="grow">Transfer to<input name="email" type="email" required placeholder="new-owner@example.com"></label>
+    <button class="danger">Transfer</button>
+  </form>
+  <p class="small muted">Both need a fresh sign-in code.</p>
+</div>
+{% elif role != 'owner' %}
+<h2>Leave</h2>
+<form method="post" action="/app/scopes/{{ s.id }}/leave"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Leave this scope</button></form>
+{% endif %}
+{% endblock %}

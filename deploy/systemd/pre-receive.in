@@ -1,0 +1,3 @@
+#!/bin/sh
+# pre-receive hook for the record repository, installed by deploy.sh. The rules are in khala/hooks.py.
+exec @ROOT@/app/.venv/bin/python -I -m khala.hooks pre-receive

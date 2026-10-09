@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Note {{ n.id }}{% endblock %}
+{% block body %}
+<p class="small"><a href="/app/review">Review</a></p>
+<h1>{{ n.title or 'Note ' ~ n.id }}</h1>
+<p class="muted">{{ who.accounts.get(n.account_id, '?') }}{% if n.agent_id %} via <span class="chip">{{ who.agents.get(n.agent_id, '?') }}</span>{% endif %}, {{ n.created_at|when }} · scope <code>{{ n.scope }}</code> ·
+<span class="chip">{{ 'waiting' if n.state == 'new' else n.outcome }}</span></p>
+{% if n.guidance %}<div class="notice warn">Guidance for the next merge: {{ n.guidance }}</div>{% endif %}
+{% if n.detail %}<div class="notice">{{ n.detail }}</div>{% endif %}
+<pre>{{ text }}</pre>
+<p class="small muted">Shown as plain text. Notes are written by agents, so nothing in them is rendered or followed.</p>
+{% endblock %}

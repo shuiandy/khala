@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>{{ title }}</h1>
+<p>{{ message }}</p>
+{% if back %}<p><a href="{{ back }}">Back</a></p>{% elif not me %}<p><a href="/app/login">Sign in</a></p>{% endif %}
+{% endblock %}

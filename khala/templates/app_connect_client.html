@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Connect {{ entry.name }}{% endblock %}
+{% block body %}
+<p class="small"><a href="/app/connect">Connect a client</a></p>
+<div class="page-head"><div><h1>Connect {{ entry.name }}</h1>
+<p class="muted">The first way is the quickest. Each connection shows up on the Agents page, where you can limit or revoke it.</p></div></div>
+{% if token %}
+<div class="notice warn banner">{{ icon('alert') }}<span><b>Copy the token now; it is shown only once.</b> It expires in {{ days }} days. Keep it in the app’s settings, never in a prompt or a memory record.</span></div>
+{% endif %}
+{% for ch in channels if (token and ch.needs_token) or (not token and not ch.needs_token) %}
+<section class="card">
+  <div class="card-head"><h2>{{ ch.label }}</h2>{% if ch.confidence == 'unverified' %}<span class="chip warn" title="Follows the client's documented format, but no official example shows this exact use">untested</span>{% endif %}</div>
+  {% if ch.type == 'link' %}
+  <p><a class="button primary" href="{{ ch.text }}">{{ ch.label }}</a></p>
+  <details><summary class="small muted">Show the link</summary><pre>{{ ch.text }}</pre></details>
+  {% elif ch.type == 'command' %}
+  <pre>{{ ch.text }}</pre>
+  {% elif ch.type == 'file' %}
+  <p class="small muted">Add this to <code>{{ ch.path.all or ch.path.macos }}</code>{% if ch.path.windows and ch.path.windows != ch.path.macos %} (Windows: <code>{{ ch.path.windows }}</code>){% endif %}{% if ch.format == 'json' %}, merging it with what is already there{% endif %}:</p>
+  <pre>{{ ch.text }}</pre>
+  {% else %}
+  <ol>{% for step in ch.steps %}<li>{{ step }}</li>{% endfor %}</ol>
+  {% if ch.text %}<pre>{{ ch.text }}</pre>{% endif %}
+  {% endif %}
+  {% if ch.note %}<p class="small muted">{{ ch.note }}</p>{% endif %}
+</section>
+{% endfor %}
+{% if not token and channels|selectattr('needs_token')|list %}
+<section class="card">
+  <div class="card-head"><h2>{{ 'Or use a token' if entry.oauth else 'Create a token' }}</h2></div>
+  <p class="small muted">{% if entry.oauth %}For setups that cannot sign in through a browser.{% else %}{{ entry.name }} cannot sign in to MCP servers, so it uses a token.{% endif %} The token is shown once, filled into the steps for {{ entry.name }}.</p>
+  <form method="post" action="/app/connect/{{ entry.id }}" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Expires<select name="days">{% for d in choices %}<option value="{{ d }}" {% if d == 90 %}selected{% endif %}>{{ 'in a year' if d == 365 else 'in %d days' % d }}</option>{% endfor %}</select></label>
+    <button class="primary">Create token</button>
+    <span class="small muted">Needs a fresh check that it’s you.</span>
+  </form>
+</section>
+{% endif %}
+<p class="small muted">Sources, checked {{ entry.verified }}: {% for s in entry.sources %}<a href="{{ s }}" rel="noopener noreferrer">{{ loop.index }}</a>{{ ' ' if not loop.last }}{% endfor %}</p>
+{% endblock %}

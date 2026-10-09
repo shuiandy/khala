@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Audit{% endblock %}
+{% block body %}
+{% set families = {'record': 'record', 'note': 'record', 'conflict': 'record', 'grant': 'access', 'scope': 'access',
+                   'invite': 'access', 'account': 'access', 'login': 'auth', 'auth': 'auth', 'session': 'auth',
+                   'token': 'auth', 'consent': 'auth', 'web': 'auth', 'agent': 'agent'} %}
+{% set keep = {'target': f.get('target', ''), 'days': f.get('days', ''), 'all': f.get('all', ''), 'agent': f.get('agent', '')} %}
+<div class="page-head">
+  <div>
+    <h1>Audit log</h1>
+    <p class="lede">{% if all %}Everything on this server.{% else %}Your own activity and activity in scopes you own.{% endif %}</p>
+  </div>
+  <div class="actions"><a class="button" href="/app/audit.csv?{{ query }}">Export CSV</a></div>
+</div>
+
+<form method="get" action="/app/audit" class="filters card">
+  <input name="action" value="{{ f.get('action', '') }}" placeholder="Action, e.g. grant" aria-label="Action">
+  <input name="target" value="{{ f.get('target', '') }}" placeholder="Scope or record" aria-label="Target">
+  <select name="days" aria-label="Period">{% for d in (1, 7, 30, 90, 400) %}<option value="{{ d }}" {% if days == d %}selected{% endif %}>last {{ d }} day{{ 's' if d != 1 }}</option>{% endfor %}</select>
+  {% if f.get('agent') %}<input type="hidden" name="agent" value="{{ f.get('agent') }}">{% endif %}
+  {% if me.is_admin %}<label class="check"><input type="checkbox" name="all" value="1" {% if all %}checked{% endif %}> Everyone</label>{% endif %}
+  <button class="primary">Filter</button>
+</form>
+
+<nav class="seg" aria-label="Kind">
+  {% for value, label, fam in (('', 'All', ''), ('record.', 'Records', 'record'), ('grant.', 'Sharing', 'access'), ('login.', 'Sign-in', 'auth'), ('auth.', 'Security', 'auth'), ('agent.', 'Agents', 'agent')) %}
+  {% set q = dict(keep, action=value)|dictsort|selectattr('1')|list %}
+  {% set on = f.get('action', '') == value %}
+  <a href="/app/audit{{ '?' if q }}{{ q|urlencode }}" class="{{ 'on' if on }}"{% if on %} aria-current="page"{% endif %}>{% if fam %}<span class="dot k-{{ fam }}"></span>{% endif %}{{ label }}</a>
+  {% endfor %}
+</nav>
+
+<section class="panel">
+{% for e in rows %}
+  {% set day = e.at|when('%A, %B %d') %}
+  {% if loop.changed(day) %}<div class="day">{{ day }}</div>{% endif %}
+  <div class="event">
+    <span class="time">{{ e.at|when('%H:%M') }}</span>
+    <span class="dot k-{{ families.get(e.action.split('.')[0], 'other') }}"></span>
+    <span class="what">
+      <span><code>{{ e.action }}</code>{% if e.target %}<span class="scope">{{ e.target }}</span>{% endif %}</span>
+      {% if e.detail %}<span class="detail">{{ e.detail }}</span>{% endif %}
+    </span>
+    <span class="who">
+      <span>{{ e.account_email or '—' }}{% if e.agent_name %} <span class="chip">{{ e.agent_name }}</span>{% endif %}</span>
+      {% if e.ip_prefix %}<span>{{ e.ip_prefix }}</span>{% endif %}
+    </span>
+  </div>
+{% else %}<div class="empty">No events.</div>{% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Records{% endblock %}
+{% block body %}
+{% set keep = {'q': f.q, 'scope': f.scope, 'type': f.type} %}{% if f.due %}{% set _ = keep.update({'due': '1'}) %}{% endif %}
+<div class="page-head">
+  <div>
+    <h1>Records</h1>
+    <p class="lede">{{ total }} record{{ 's' if total != 1 }}{% if total > rows|length %}, showing the first {{ rows|length }}{% endif %}.</p>
+  </div>
+</div>
+
+<form method="get" action="/app/records" class="filters card">
+  <input type="search" name="q" value="{{ f.q }}" placeholder="Search names, descriptions and text" aria-label="Keywords">
+  <select name="scope" aria-label="Scope"><option value="">All scopes</option>
+    {% for s in scopes %}<option value="{{ s }}" {% if f.scope == s %}selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+  <select name="type" aria-label="Type"><option value="">All types</option>
+    {% for t in types %}<option value="{{ t }}" {% if f.type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+  {% if f.status %}<input type="hidden" name="status" value="{{ f.status }}">{% endif %}
+  <label class="check"><input type="checkbox" name="due" value="1" {% if f.due %}checked{% endif %}> Due for review</label>
+  <button class="primary">Filter</button>
+</form>
+
+<nav class="seg" aria-label="Status">
+  {% for value, label in (('', 'All'), ('active', 'Active'), ('proposed', 'Proposed'), ('outdated', 'Outdated')) %}
+  {% set q = dict(keep, status=value)|dictsort|selectattr('1')|list %}
+  <a href="/app/records{{ '?' if q }}{{ q|urlencode }}" class="{{ 'on' if f.status == value }}"{% if f.status == value %} aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+
+<section class="panel">
+{% for r in rows %}
+  <a class="row-link" href="/app/records/{{ r.name }}">
+    <span class="body">
+      <span class="name">{{ r.name }}</span>
+      <span class="desc clamp">{{ r.meta.description }}</span>
+      <span class="meta"><span class="scope">{{ r.meta.scope }}</span>{% if r.meta.type %}<span>{{ r.meta.type }}</span>{% endif %}{% if r.meta.verified %}<span>verified {{ r.meta.verified }}</span>{% endif %}</span>
+    </span>
+    <span class="end">
+      <span class="chip {{ 'ok' if r.meta.status == 'active' else 'warn' if r.meta.status == 'proposed' else '' }}">{{ r.meta.status }}</span>
+      {% if r.meta.status == 'active' and due_fn(r.meta) %}<span class="chip warn">due</span>{% endif %}
+    </span>
+  </a>
+{% else %}<div class="empty">Nothing matches.</div>{% endfor %}
+</section>
+{% endblock %}

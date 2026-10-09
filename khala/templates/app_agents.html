@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Agents{% endblock %}
+{% block body %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Agents and devices</h1>
+    <p class="lede">Every app, device or bot that signed in to your memory. Each one can be limited or revoked on its own.</p>
+  </div>
+  <div class="actions"><a class="button" href="#bot-token">Bot token</a><a class="button primary" href="/app/connect">{{ icon("plus", 16) }}Connect agent</a></div>
+</div>
+
+<div class="agents">
+{% for row in rows %}{% set a = row.a %}
+<article class="card agent{{ ' revoked' if a.revoked_at }}">
+  <div class="head">
+    <span class="icon">{{ icon('agents' if a.kind == 'bot' else 'device', 19) }}</span>
+    <div class="title">
+      <b>{{ a.name }}</b><span class="chip outline">{{ a.kind }}</span>
+      <div class="small muted">{% if row.client %}Client “{{ row.client }}”{% elif a.kind == 'bot' and not a.oauth_client_id %}Bot token{% else %}Added {{ a.created_at|when('%Y-%m-%d') }}{% endif %}</div>
+    </div>
+    {% if a.revoked_at %}<span class="state err"><span class="dot err"></span>revoked {{ a.revoked_at|when('%Y-%m-%d') }}</span>
+    {% else %}<span class="state ok"><span class="dot ok"></span>active</span>{% endif %}
+  </div>
+  <div>
+    <div class="label">Can reach</div>
+    <div class="access">
+      {% if row.ceiling is none %}<span><code>everything</code><b class="rw">all</b></span>
+      {% else %}{% for sid, lvl in row.ceiling|dictsort %}<span><code>{{ sid }}</code><b class="{{ lvl }}">{{ lvl }}</b></span>{% else %}<span class="small muted">{{ row.summary }}</span>{% endfor %}{% endif %}
+    </div>
+  </div>
+  <div class="facts-line"><span>Last used {{ a.last_used_at|ago }}{% if a.last_ip_prefix %} from {{ a.last_ip_prefix }}{% endif %}</span><span>Added {{ a.created_at|when('%Y-%m-%d') }}</span></div>
+  <div class="links"><a href="/app/audit?agent={{ a.id }}">Activity</a><a href="/app/agents/{{ a.id }}/undo">Undo its changes</a></div>
+  {% if not a.revoked_at %}
+  <details>
+    <summary>Edit name and access</summary>
+    <form method="post" action="/app/agents/{{ a.id }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="row">
+        <label class="grow">Name<input name="name" value="{{ a.name }}" maxlength="80" required></label>
+        <label>Kind<select name="kind"><option value="device" {% if a.kind == 'device' %}selected{% endif %}>device</option><option value="bot" {% if a.kind == 'bot' %}selected{% endif %}>bot</option></select></label>
+      </div>
+      <label class="check"><input type="radio" name="access" value="all" {% if row.ceiling is none %}checked{% endif %}> Everything I can reach, including scopes shared with me later</label>
+      <label class="check"><input type="radio" name="access" value="some" {% if row.ceiling is not none %}checked{% endif %}> Only these scopes:</label>
+      {% for s, role in scopes %}{% set cur = (row.ceiling or {}).get(s.id, '') %}
+      <div class="scope-pick">
+        <span><code>{{ s.id }}</code>{% if role != 'owner' %} <span class="chip">shared · {{ role }}</span>{% endif %}</span>
+        <select name="scope:{{ s.id }}" aria-label="Access to {{ s.id }}">
+          <option value="" {% if not cur %}selected{% endif %}>No access</option>
+          <option value="r" {% if cur == 'r' %}selected{% endif %}>Read</option>
+          {% if role != 'viewer' %}<option value="rw" {% if cur == 'rw' %}selected{% endif %}>Read &amp; write</option>{% endif %}
+        </select>
+      </div>
+      {% endfor %}
+      <p><button class="primary">Save</button></p>
+    </form>
+    <form method="post" action="/app/agents/{{ a.id }}/revoke"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Revoke this agent</button></form>
+  </details>
+  {% endif %}
+</article>
+{% else %}
+<div class="card empty">No agents yet.</div>
+{% endfor %}
+</div>
+
+<h2 id="connect">Connect a new agent</h2>
+<div class="card">
+  <p class="flush">Every client signs in with your email and then asks you, on a consent page, what to call it and what it may reach.</p>
+  <dl class="cmd">
+    <dt>Claude Code</dt><dd><code>claude mcp add --transport http memory {{ issuer }}/mcp</code></dd>
+    <dt>Codex</dt><dd><code>codex mcp add memory --url {{ issuer }}/mcp</code></dd>
+    <dt>claude.ai, Claude apps</dt><dd><span class="small muted">Settings → Connectors → Add custom connector</span><code>{{ issuer }}/mcp</code></dd>
+    <dt>ChatGPT and other MCP clients</dt><dd><span class="small muted">Add a remote MCP server with OAuth</span><code>{{ issuer }}/mcp</code></dd>
+  </dl>
+  <p class="small muted">To check it worked, ask the agent to call <code>memory_scopes</code>; its “last used” time above updates right away.</p>
+</div>
+
+<h2 id="bot-token">Token for a bot without OAuth</h2>
+<div class="card">
+  <p class="small muted flush">For unattended bots that can’t complete a browser sign-in. The bot can only reach the scopes you pick here.</p>
+  <form method="post" action="/app/bots">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="row">
+      <label class="grow">Name<input name="name" maxlength="80" required placeholder="Nightly digest bot"></label>
+      <label>Expires<select name="days"><option value="7">in 7 days</option><option value="30">in 30 days</option><option value="90" selected>in 90 days</option><option value="365">in a year</option></select></label>
+    </div>
+    <div class="narrow">
+    {% for s, role in scopes %}
+    <div class="scope-pick">
+      <span><code>{{ s.id }}</code>{% if role != 'owner' %} <span class="chip">shared · {{ role }}</span>{% endif %}</span>
+      <select name="scope:{{ s.id }}" aria-label="Access to {{ s.id }}">
+        <option value="" selected>No access</option>
+        <option value="r">Read</option>
+        {% if role != 'viewer' %}<option value="rw">Read &amp; write</option>{% endif %}
+      </select>
+    </div>
+    {% endfor %}
+    </div>
+    <p><button class="primary">Create token</button> <span class="small muted">Needs a fresh check that it’s you.</span></p>
+  </form>
+</div>
+{% endblock %}

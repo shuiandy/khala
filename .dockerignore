@@ -1,0 +1,15 @@
+.git
+.venv
+.claude
+assets
+tests
+docs
+deploy
+*.egg-info
+build
+dist
+khala-data
+khala.env
+.env
+*.db
+**/__pycache__

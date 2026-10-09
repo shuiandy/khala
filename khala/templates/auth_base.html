@@ -1,0 +1,31 @@
+{% from "_icons.html" import mark %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Sign in{% endblock %} · {{ instance_name }}</title>
+<link rel="icon" type="image/png" href="/app/static/khala-icon.png?v={{ icon_version }}">
+<link rel="stylesheet" href="/app/static/app.css?v={{ css_version }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<div class="auth-shell">
+<aside class="auth-brand">
+  <div class="logo"><span class="mark">{{ mark() }}</span>Khala</div>
+  <div class="pitch">
+    <b>One memory for every agent you work with.</b>
+    <ul>
+      <li>Records are Markdown files in Git, with full history and undo.</li>
+      <li>Each agent reaches only the scopes you allow it.</li>
+      <li>Access is by invitation. No password is ever used.</li>
+    </ul>
+  </div>
+  <span class="host">{{ instance_name }}</span>
+</aside>
+<div class="auth"><div class="auth-body">
+{% block body %}{% endblock %}
+</div></div>
+</div>
+</body>
+</html>

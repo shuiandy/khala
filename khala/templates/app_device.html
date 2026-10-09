@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Connect a command line{% endblock %}
+{% block body %}
+<div class="page-head"><div><h1>Connect a command line</h1>
+<p class="muted">A tool on your computer showed you a code. Enter it here to give that tool a token of its own.</p></div></div>
+{% if error %}<div class="notice err banner">{{ icon('alert') }}<span>{{ error }}</span></div>{% endif %}
+{% if not row %}
+<div class="card">
+  <form method="get" action="/app/device" class="row">
+    <label class="grow">Code<input name="code" value="{{ code }}" autocomplete="off" autocapitalize="characters" required placeholder="BCDF-GHJK"></label>
+    <button class="primary">Continue</button>
+  </form>
+</div>
+{% else %}
+<div class="card">
+  <p><b>{{ row.client_name }}</b> asks for access. Only approve it if you just started it yourself.</p>
+  <form method="post" action="/app/device">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="code" value="{{ code }}">
+    <div class="row">
+      <label class="grow">Name<input name="name" maxlength="80" value="{{ row.client_name }}"></label>
+      <label>Expires<select name="days">{% for d in days %}<option value="{{ d }}" {% if d == 90 %}selected{% endif %}>{{ 'in a year' if d == 365 else 'in %d days' % d }}</option>{% endfor %}</select></label>
+    </div>
+    <p><label><input type="radio" name="access" value="all" checked> Everything I can reach</label>
+       <label><input type="radio" name="access" value="some"> Only the scopes below</label></p>
+    <div class="narrow">
+    {% for s, role in scopes %}
+    <div class="scope-pick">
+      <span><code>{{ s.id }}</code>{% if role != 'owner' %} <span class="chip">shared · {{ role }}</span>{% endif %}</span>
+      <select name="scope:{{ s.id }}" aria-label="Access to {{ s.id }}">
+        <option value="" selected>No access</option>
+        <option value="r">Read</option>
+        {% if role != 'viewer' %}<option value="rw">Read &amp; write</option>{% endif %}
+      </select>
+    </div>
+    {% endfor %}
+    </div>
+    <p><button class="primary" name="action" value="approve">Approve</button>
+       <button name="action" value="deny">Deny</button>
+       <span class="small muted">Approving needs a fresh check that it’s you.</span></p>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

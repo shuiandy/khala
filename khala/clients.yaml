@@ -1,0 +1,545 @@
+# How to connect each known MCP client to a Khala server, most convenient way first.
+#
+# Read by the web wizard (/app/connect), by `khala connect`, and by the consent page to recognise who is asking.
+# Adding a client means adding an entry here; tests check every entry renders and every link decodes back.
+#
+# Placeholders in templates and configs: {url} the MCP endpoint, {name} the server name in the client's config,
+# {token} a bearer token (only in channels with needs_token). In link templates also: {url_q} and {name_q}
+# (percent-encoded), and the channel's `config` object as {config_json_q} (URL-encoded JSON), {config_b64}
+# (base64), {config_b64_q} (base64, then URL-encoded) or {config_b64url} (base64url, no padding).
+#
+# identify: cimd lists client ID metadata document URLs (strong: the server fetches and checks them), cimd_pattern
+# a regex for per-server variants, client_names the names clients send when they register (weak: self-reported,
+# used only to suggest a name and kind, never for access).
+#
+# confidence: verified means an official source states it; unverified means it follows the documented schema
+# but no official page shows this exact use, and the wizard says so.
+
+- id: claude
+  name: Claude (web, desktop and mobile)
+  kind: device
+  oauth: true
+  identify:
+    cimd: [https://claude.ai/oauth/mcp-oauth-client-metadata]
+    client_names: [Claude]
+  verified: 2026-10-08
+  sources:
+    - https://claude.com/docs/connectors/building/directory-vs-custom
+    - https://claude.com/docs/connectors/custom/remote-mcp
+    - https://claude.com/docs/connectors/building/authentication
+  channels:
+    - type: link
+      label: Add to Claude
+      template: "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName={name_q}&connectorUrl={url_q}"
+      note: Opens a filled-in dialog in Claude; confirm it and sign in. Connectors added on the web also reach Claude Desktop and mobile.
+      confidence: verified
+    - type: connector
+      label: Add by hand
+      steps:
+        - "Customize → Connectors → + Add → Add custom connector."
+        - "Name it, paste {url} as the URL, and keep the default sign-in."
+        - "On Team and Enterprise plans an owner adds it under Organization settings → Connectors, and members click Connect."
+      note: The Free plan allows one custom connector.
+      confidence: verified
+
+- id: claude-code
+  name: Claude Code
+  kind: device
+  oauth: true
+  identify:
+    cimd: [https://claude.ai/oauth/claude-code-client-metadata]
+    client_names: [Claude Code]
+  verified: 2026-10-08
+  sources:
+    - https://code.claude.com/docs/en/mcp
+    - https://claude.ai/oauth/claude-code-client-metadata
+  channels:
+    - type: command
+      label: One command
+      binary: claude
+      template: "claude mcp add --transport http --scope user {name} {url}"
+      note: Then run /mcp in a session to sign in. --scope user makes it available in every project.
+      confidence: verified
+    - type: file
+      label: Project file
+      format: json
+      path: {all: ".mcp.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {type: http, url: "{url}"}
+      note: Shares the server with everyone working in this project; each person signs in for themselves.
+      confidence: verified
+    - type: command
+      label: With a token instead of signing in
+      binary: claude
+      needs_token: true
+      template: "claude mcp add --transport http --scope user {name} {url} --header \"Authorization: Bearer {token}\""
+      note: With a token set, Claude Code does not fall back to signing in if the token stops working.
+      confidence: verified
+
+- id: chatgpt
+  name: ChatGPT
+  kind: device
+  oauth: true
+  identify:
+    cimd: [https://chatgpt.com/oauth/client.json]
+    cimd_pattern: "^https://chatgpt\\.com/oauth/[A-Za-z0-9_-]+/client\\.json$"
+  verified: 2026-10-08
+  sources:
+    - https://developers.openai.com/api/docs/guides/custom-mcp-server
+    - https://developers.openai.com/apps-sdk/build/auth
+  channels:
+    - type: connector
+      label: Add as a plugin
+      steps:
+        - "Open chatgpt.com/plugins on the web, click +, and choose Add custom MCP server."
+        - "Name it, paste {url} as the server URL, and choose OAuth for authentication."
+        - "Create it as a plugin, install it from your personal plugins, then pick it with @ in a chat."
+      note: Available where your workspace allows custom MCP servers. ChatGPT only signs in with OAuth; tokens are not supported.
+      confidence: verified
+
+- id: codex
+  name: Codex
+  kind: device
+  oauth: true
+  identify:
+    cimd: [https://chatgpt.com/oauth/codex/client.json]
+    cimd_pattern: "^https://chatgpt\\.com/oauth/codex/[A-Za-z0-9_-]+/client\\.json$"
+    client_names: [Codex]
+  verified: 2026-10-08
+  sources:
+    - https://learn.chatgpt.com/docs/extend/mcp?surface=cli
+    - https://learn.chatgpt.com/docs/config-file/config-reference
+  channels:
+    - type: command
+      label: One command
+      binary: codex
+      template: "codex mcp add {name} --url {url}"
+      note: "Then sign in: codex mcp login {name}. The Codex app, CLI and IDE extension share this setting."
+      confidence: verified
+    - type: file
+      label: Config file
+      format: toml
+      path: {all: "~/.codex/config.toml"}
+      snippet: |
+        [mcp_servers.{name}]
+        url = "{url}"
+      confidence: verified
+    - type: command
+      label: With a token instead of signing in
+      binary: codex
+      needs_token: true
+      template: "codex mcp add {name} --url {url} --bearer-token-env-var KHALA_TOKEN"
+      note: "Codex reads the token from KHALA_TOKEN when it starts; add export KHALA_TOKEN={token} to your shell profile."
+      confidence: verified
+
+- id: cursor
+  name: Cursor
+  kind: device
+  oauth: true
+  identify:
+    client_names: [Cursor]
+  verified: 2026-10-08
+  sources:
+    - https://cursor.com/docs/context/mcp/install-links
+    - https://cursor.com/docs/context/mcp
+  channels:
+    - type: link
+      label: Add to Cursor
+      template: "cursor://anysphere.cursor-deeplink/mcp/install?name={name_q}&config={config_b64_q}"
+      config: {url: "{url}"}
+      note: Cursor asks to confirm, then signs in when the server is first used.
+      confidence: verified
+    - type: file
+      label: Config file
+      format: json
+      path: {all: "~/.cursor/mcp.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {url: "{url}"}
+      confidence: verified
+    - type: file
+      label: Config file with a token
+      needs_token: true
+      format: json
+      path: {all: "~/.cursor/mcp.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {url: "{url}", headers: {Authorization: "Bearer {token}"}}
+      confidence: verified
+
+- id: vscode
+  name: VS Code (GitHub Copilot)
+  kind: device
+  oauth: true
+  identify:
+    cimd: [https://vscode.dev/oauth/client-metadata.json]
+    client_names: [Visual Studio Code, Visual Studio Code - Insiders]
+  verified: 2026-10-08
+  sources:
+    - https://code.visualstudio.com/api/extension-guides/ai/mcp
+    - https://code.visualstudio.com/docs/copilot/customization/mcp-servers
+    - https://code.visualstudio.com/docs/copilot/reference/mcp-configuration
+  channels:
+    - type: link
+      label: Add to VS Code
+      template: "vscode:mcp/install?{config_json_q}"
+      config: {name: "{name}", type: http, url: "{url}"}
+      confidence: verified
+    - type: command
+      label: One command
+      binary: code
+      template: "code --add-mcp '{\"name\":\"{name}\",\"type\":\"http\",\"url\":\"{url}\"}'"
+      note: Adds it to your user profile.
+      confidence: unverified
+    - type: file
+      label: Copilot config file
+      format: json
+      path: {all: "~/.copilot/mcp-config.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {type: http, url: "{url}"}
+      confidence: verified
+
+- id: gemini-cli
+  name: Gemini CLI
+  kind: device
+  oauth: true
+  identify:
+    client_names: [Gemini CLI MCP Client]
+  verified: 2026-10-08
+  sources:
+    - https://github.com/google-gemini/gemini-cli/blob/2ce1a6963e9e53a04afaf76111e4527cfa7c5dd7/docs/tools/mcp-server.md
+    - https://github.com/google-gemini/gemini-cli/blob/2ce1a6963e9e53a04afaf76111e4527cfa7c5dd7/packages/cli/src/commands/mcp/add.ts
+  channels:
+    - type: command
+      label: One command
+      binary: gemini
+      template: "gemini mcp add --transport http --scope user {name} {url}"
+      note: "Then sign in from a session: /mcp auth {name}. Without --scope user it only applies to the current project."
+      confidence: verified
+    - type: file
+      label: Settings file
+      format: json
+      path: {all: "~/.gemini/settings.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {url: "{url}", type: http}
+      confidence: verified
+    - type: command
+      label: With a token instead of signing in
+      binary: gemini
+      needs_token: true
+      template: "gemini mcp add --transport http --scope user --header \"Authorization: Bearer {token}\" {name} {url}"
+      confidence: verified
+
+- id: zed
+  name: Zed
+  kind: device
+  oauth: true
+  identify:
+    cimd: [https://zed.dev/oauth/client-metadata.json]
+    client_names: [Zed]
+  verified: 2026-10-08
+  sources:
+    - https://zed.dev/docs/ai/mcp
+  channels:
+    - type: connector
+      label: Add in Zed
+      steps:
+        - "Settings → AI → MCP Servers → Add Server → Add Remote Server."
+        - "Paste {url}; Zed signs in when it first connects."
+      confidence: verified
+    - type: file
+      label: Settings file
+      format: json
+      path: {macos: "~/.config/zed/settings.json", linux: "~/.config/zed/settings.json", windows: "%APPDATA%/Zed/settings.json"}
+      merge: [context_servers, "{name}"]
+      entry: {url: "{url}"}
+      confidence: verified
+
+- id: goose
+  name: goose
+  kind: device
+  oauth: true
+  identify:
+    cimd: [https://goose-docs.ai/oauth/client-metadata.json]
+    client_names: [goose]
+  verified: 2026-10-08
+  sources:
+    - https://github.com/aaif-goose/goose/blob/3b094d7afe681f78db63f3ce0b95d5124fc3341c/documentation/docs/getting-started/using-extensions.md
+    - https://github.com/aaif-goose/goose/blob/3b094d7afe681f78db63f3ce0b95d5124fc3341c/documentation/docs/guides/config-files.md
+  channels:
+    - type: link
+      label: Add to goose
+      template: "goose://extension?url={url_q}&type=streamable_http&id={name_q}&name={name_q}&description=Shared%20memory"
+      note: Start a new chat afterwards; the current one does not pick it up.
+      confidence: verified
+    - type: connector
+      label: Add in goose
+      steps:
+        - "Extensions → Add custom extension → type Streamable HTTP."
+        - "Paste {url} as the endpoint."
+      confidence: verified
+    - type: file
+      label: Config file
+      format: yaml
+      path: {macos: "~/.config/goose/config.yaml", linux: "~/.config/goose/config.yaml", windows: "%APPDATA%/Block/goose/config/config.yaml"}
+      snippet: |
+        extensions:
+          {name}:
+            type: streamable_http
+            name: {name}
+            enabled: true
+            uri: "{url}"
+            timeout: 300
+      confidence: verified
+
+- id: hermes
+  name: Hermes Agent
+  kind: device
+  oauth: true
+  identify:
+    cimd: [https://nousresearch.github.io/hermes-agent/docs/oauth/client-metadata.json]
+    client_names: [Hermes Agent]
+  verified: 2026-10-08
+  sources:
+    - https://hermes-agent.nousresearch.com/docs/reference/mcp-config-reference
+    - https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp
+  channels:
+    - type: link
+      label: Add to Hermes
+      template: "hermes://mcp/install?name={name_q}&config={config_b64url}"
+      config: {url: "{url}", auth: oauth}
+      note: Works with the Hermes desktop app.
+      confidence: verified
+    - type: command
+      label: One command
+      binary: hermes
+      template: "hermes mcp add {name} --url \"{url}\" --auth oauth"
+      note: "If signing in times out, run hermes mcp login {name} from a new terminal."
+      confidence: verified
+    - type: file
+      label: Config file
+      format: yaml
+      path: {all: "~/.hermes/config.yaml"}
+      snippet: |
+        mcp_servers:
+          {name}:
+            url: "{url}"
+            auth: oauth
+      confidence: verified
+
+- id: opencode
+  name: opencode
+  kind: device
+  oauth: true
+  identify:
+    client_names: [OpenCode]
+  verified: 2026-10-08
+  sources:
+    - https://opencode.ai/docs/mcp-servers
+  channels:
+    - type: command
+      label: One command
+      binary: opencode
+      template: "opencode mcp add {name} --url {url}"
+      note: "Then sign in: opencode mcp auth {name}."
+      confidence: verified
+    - type: file
+      label: Config file
+      format: json
+      path: {all: "~/.config/opencode/opencode.json"}
+      merge: [mcp, "{name}"]
+      entry: {type: remote, url: "{url}", enabled: true}
+      confidence: verified
+
+- id: cline
+  name: Cline
+  kind: device
+  oauth: true
+  identify:
+    client_names: [Cline]
+  verified: 2026-10-08
+  sources:
+    - https://docs.cline.bot/mcp/connecting-to-a-remote-server
+    - https://docs.cline.bot/cli/cli-reference
+  channels:
+    - type: command
+      label: One command
+      binary: cline
+      template: "cline mcp add {name} {url} --transport http --yes"
+      note: "Then run cline mcp and choose Authorize OAuth. The VS Code extension and the CLI share this setting."
+      confidence: verified
+    - type: file
+      label: Settings file
+      format: json
+      path: {all: "~/.cline/data/settings/cline_mcp_settings.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {type: streamableHttp, url: "{url}"}
+      note: Set the type; without it Cline uses the old SSE transport.
+      confidence: verified
+
+- id: kiro
+  name: Kiro
+  kind: device
+  oauth: true
+  identify: {}
+  verified: 2026-10-08
+  sources:
+    - https://kiro.dev/docs/mcp/servers.md
+    - https://kiro.dev/docs/mcp/configuration/
+  channels:
+    - type: link
+      label: Add to Kiro
+      template: "https://kiro.dev/launch/mcp/add?name={name_q}&config={config_json_q}"
+      config: {url: "{url}", disabled: false}
+      confidence: verified
+    - type: file
+      label: Config file
+      format: json
+      path: {all: "~/.kiro/settings/mcp.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {url: "{url}"}
+      note: Also used by Kiro CLI, which replaced the Amazon Q Developer CLI.
+      confidence: verified
+
+- id: devin-desktop
+  name: Devin Desktop (formerly Windsurf)
+  kind: device
+  oauth: true
+  identify: {}
+  verified: 2026-10-08
+  sources:
+    - https://docs.devin.ai/cli/reference/commands
+    - https://docs.devin.ai/desktop/cascade/mcp
+  channels:
+    - type: command
+      label: One command (Devin Local)
+      binary: devin
+      template: "devin mcp add -s user {name} {url}"
+      note: "Then sign in: devin mcp login {name}."
+      confidence: verified
+    - type: file
+      label: Config file
+      format: json
+      path: {macos: "~/.config/devin/mcp_config.json", linux: "~/.config/devin/mcp_config.json", windows: "%APPDATA%/devin/mcp_config.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {url: "{url}"}
+      confidence: verified
+
+- id: lm-studio
+  name: LM Studio
+  kind: device
+  oauth: true
+  identify: {}
+  verified: 2026-10-08
+  sources:
+    - https://lmstudio.ai/docs/app/mcp/deeplink
+    - https://lmstudio.ai/docs/app/mcp
+  channels:
+    - type: link
+      label: Add to LM Studio
+      template: "lmstudio://add_mcp?name={name_q}&config={config_b64_q}"
+      config: {url: "{url}"}
+      confidence: verified
+    - type: file
+      label: Config file
+      format: json
+      path: {macos: "~/.lmstudio/mcp.json", linux: "~/.lmstudio/mcp.json", windows: "%USERPROFILE%/.lmstudio/mcp.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {url: "{url}"}
+      confidence: verified
+
+- id: junie
+  name: Junie (JetBrains)
+  kind: device
+  oauth: true
+  identify: {}
+  verified: 2026-10-08
+  sources:
+    - https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html
+  channels:
+    - type: file
+      label: Config file
+      format: json
+      path: {all: "~/.junie/mcp/mcp.json"}
+      merge: [mcpServers, "{name}"]
+      entry: {url: "{url}"}
+      note: "Then open /mcp, select the server and choose Authorize."
+      confidence: verified
+
+- id: continue
+  name: Continue
+  kind: device
+  oauth: false
+  identify:
+    client_names: [Continue Dev, Inc]
+  verified: 2026-10-08
+  sources:
+    - https://docs.continue.dev/customize/deep-dives/mcp
+    - https://github.com/continuedev/continue/blob/main/core/context/mcp/MCPConnection.ts
+  channels:
+    - type: file
+      label: Workspace block with a token
+      needs_token: true
+      format: yaml
+      path: {all: ".continue/mcpServers/{name}.yaml"}
+      snippet: |
+        name: {name}
+        version: 0.0.1
+        schema: v1
+        mcpServers:
+          - name: {name}
+            type: streamable-http
+            url: {url}
+            apiKey: {token}
+      note: Continue only signs in with OAuth over SSE, so it uses a token here.
+      confidence: verified
+
+- id: jetbrains-ai
+  name: JetBrains AI Assistant
+  kind: device
+  oauth: false
+  identify: {}
+  verified: 2026-10-08
+  sources:
+    - https://www.jetbrains.com/help/ai-assistant/mcp.html
+    - https://youtrack.jetbrains.com/issue/LLM-25012
+  channels:
+    - type: connector
+      label: Add through the stdio bridge
+      needs_token: true
+      steps:
+        - "Install Khala's command line on this computer: pipx install khala."
+        - "Settings → Tools → AI Assistant → Model Context Protocol (MCP) → Add, and paste the JSON below."
+      snippet: |
+        {"mcpServers": {"{name}": {"command": "khala", "args": ["bridge", "{url}"], "env": {"KHALA_TOKEN": "{token}"}}}}
+      note: AI Assistant cannot sign in to MCP servers yet, so the bridge carries a token for it.
+      confidence: verified
+
+- id: other
+  name: Any other MCP client
+  kind: device
+  oauth: true
+  identify: {}
+  verified: 2026-10-08
+  sources:
+    - https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization
+  channels:
+    - type: connector
+      label: Remote server with sign-in
+      steps:
+        - "Add a remote MCP server (Streamable HTTP) with the URL {url}."
+        - "The client signs in through your browser on first use."
+      confidence: verified
+    - type: connector
+      label: Remote server with a token
+      needs_token: true
+      steps:
+        - "Add a remote MCP server with the URL {url}."
+        - "Send the header Authorization: Bearer {token}."
+      confidence: verified
+    - type: connector
+      label: Local (stdio) only clients
+      needs_token: true
+      steps:
+        - "Install Khala's command line (pipx install khala) and add a local server that runs it:"
+      snippet: |
+        {"command": "khala", "args": ["bridge", "{url}"], "env": {"KHALA_TOKEN": "{token}"}}
+      confidence: verified

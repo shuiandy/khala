@@ -1,0 +1,15 @@
+{% extends "auth_base.html" %}
+{% block title %}Invitation{% endblock %}
+{% block body %}
+{% if invite %}
+<h1>You’re invited</h1>
+<p>{{ inviter.name if inviter else "Someone" }} invited <b>{{ invite.email }}</b> to a shared memory server{% if scope %}, with {{ invite.role }} access to the scope <code>{{ scope.id }}</code>{% endif %}.</p>
+<p>Sign in with that email address to accept. You’ll get a 6-digit code by email; no password is used.</p>
+<p><a class="button primary" href="{{ login }}">Sign in to accept</a></p>
+<p class="muted small">If you weren’t expecting this, ignore it. The invitation expires on its own.</p>
+{% else %}
+<h1>Invitation not found</h1>
+<p>This invitation expired, was cancelled, or was already used.</p>
+<p><a href="/app/login">Sign in</a></p>
+{% endif %}
+{% endblock %}

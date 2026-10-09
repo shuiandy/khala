@@ -1,0 +1,39 @@
+{% extends "auth_base.html" %}
+{% block title %}Allow access{% endblock %}
+{% block body %}
+<h1>{{ client_name }} wants access to your memory</h1>
+<p class="muted small">Signed in as {{ account.email }}.
+{% if existing %}This app is already connected as “{{ existing.name }}”; confirming keeps it and applies any changes below.{% endif %}</p>
+{% if known and verified %}<p class="small">Identified as <b>{{ known.name }}</b> by the metadata it publishes.</p>
+{% elif known %}<p class="small muted">It says it is {{ known.name }}; that is its own claim.</p>{% endif %}
+{% if others %}<p class="small">You already connected {{ known.name }} as {% for a in others %}“{{ a.name }}”{{ ', ' if not loop.last }}{% endfor %}. Confirming adds a new agent; revoke the old one on the Agents page if you no longer use it.</p>{% endif %}
+{% if error %}<p class="err">{{ error }}</p>{% endif %}
+<form method="post">
+  <input type="hidden" name="req" value="{{ req }}">
+  <fieldset>
+    <legend>Name this agent</legend>
+    <input name="name" value="{{ name }}" maxlength="80" placeholder="Mac · Claude Code" required>
+    <label class="check"><input type="radio" name="kind" value="device" {% if kind == 'device' %}checked{% endif %}> A device or app I use myself</label>
+    <label class="check"><input type="radio" name="kind" value="bot" {% if kind == 'bot' %}checked{% endif %}> An unattended bot</label>
+  </fieldset>
+  <fieldset>
+    <legend>What it can reach</legend>
+    <label class="check"><input type="radio" name="access" value="all" {% if ceiling is none %}checked{% endif %}> Everything I can reach, including scopes shared with me later</label>
+    <label class="check"><input type="radio" name="access" value="some" {% if ceiling is not none %}checked{% endif %}> Only the scopes below</label>
+    {% for s, role in scopes %}
+    {% set cur = (ceiling or {}).get(s.id, '') %}
+    <div class="scope-pick">
+      <span><code>{{ s.id }}</code>{% if role != 'owner' %} <span class="chip">shared · {{ role }}</span>{% endif %}{% if s.auto_load %} <span class="chip">auto-load</span>{% endif %}</span>
+      <select name="scope:{{ s.id }}" aria-label="Access to {{ s.id }}">
+        <option value="" {% if not cur %}selected{% endif %}>No access</option>
+        <option value="r" {% if cur == 'r' %}selected{% endif %}>Read</option>
+        {% if role != 'viewer' %}<option value="rw" {% if cur == 'rw' %}selected{% endif %}>Read &amp; write</option>{% endif %}
+      </select>
+    </div>
+    {% endfor %}
+    <p class="muted small">The per-scope choices only apply when “Only the scopes below” is selected. You can change this later in the web app.</p>
+  </fieldset>
+  <button class="primary" name="action" value="allow">Allow</button>
+  <button name="action" value="deny" formnovalidate>Deny</button>
+</form>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block body %}
+<div class="page-head">
+  <div>
+    <h1>Instance</h1>
+    <p class="lede">Admins manage accounts and invitations. Being an admin does not grant access to anyone’s scopes, but whoever can log in to the server can read everything on its disk.</p>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card stat-card"><span class="label">Repository</span><span class="tile-value mono">{{ health.head }}</span><span class="sub">Last change {{ health.head_time|when }}</span></div>
+  <div class="card stat-card"><span class="label">Off-site backup</span>
+    {% if not health.backup_configured %}<span class="tile-value"><span class="dot warn"></span>Never ran</span><span class="sub">No backup has been pushed yet</span>
+    {% elif health.backup_current %}<span class="tile-value"><span class="dot ok"></span>Current</span><span class="sub">Pushed {{ health.backup_time|ago }}</span>
+    {% else %}<span class="tile-value"><span class="dot warn"></span>Behind</span><span class="sub">Last pushed {{ health.backup_time|ago }}</span>{% endif %}</div>
+  <div class="card stat-card"><span class="label">State snapshot</span>
+    {% if not health.state_time %}<span class="tile-value"><span class="dot warn"></span>Never ran</span><span class="sub">Accounts and approvals are not backed up off-site</span>
+    {% elif health.state_fresh %}<span class="tile-value"><span class="dot ok"></span>Current</span><span class="sub">Encrypted, pushed {{ health.state_time|ago }}</span>
+    {% else %}<span class="tile-value"><span class="dot warn"></span>Behind</span><span class="sub">Last pushed {{ health.state_time|ago }}</span>{% endif %}</div>
+  <div class="card stat-card"><span class="label">Email</span><span class="tile-value">{{ mailer_kind }}</span>
+    <span class="sub">via {{ smtp_host }}</span>
+    <form method="post" action="/app/admin/mailtest"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="link">Send me a test email</button></form></div>
+  <div class="card stat-card"><span class="label">State database</span><span class="tile-value">{{ (db_size / 1024)|round(1) }} KB</span></div>
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>Pushes from Git</h2>
+    <span class="chip {{ 'err' if push_enforce else 'warn' }}">Permission problems: {{ 'refused' if push_enforce else 'report only' }}</span></div>
+  <div class="panel-foot">Mirrors push to the repository directly over Git. Pushes to anything but main, oversized records and credentials are always refused; permission problems are {{ 'refused too' if push_enforce else 'only reported for now' }}.</div>
+  {% for p in pushes %}
+  <div class="event">
+    <span class="time wide">{{ p.at|when('%m-%d %H:%M') }}</span>
+    <span class="what">{% for m in p.hard + p.soft %}<span class="small">{{ m }}</span>{% endfor %}</span>
+    <span class="chip {{ 'err' if p.rejected else 'warn' }}">{{ 'refused' if p.rejected else 'warning' }}</span>
+  </div>
+  {% else %}<div class="empty">No problems reported.</div>{% endfor %}
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Accounts</h2><span class="small muted">{{ accounts|selectattr('a.status', 'equalto', 'active')|list|length }} active of {{ accounts|length }}</span></div>
+  {% for row in accounts %}{% set a = row.a %}
+  <div class="person{{ ' off' if a.status != 'active' }}">
+    <span class="avatar" aria-hidden="true">{{ a.name[:1] }}</span>
+    <span class="body">
+      <span><b>{{ a.name }}</b> {% if a.is_admin %}<span class="chip warn">admin</span>{% endif %}{% if a.id == me.id %} <span class="small muted">you</span>{% endif %}</span>
+      <div class="small muted">{{ row.emails|join(', ') }} · handle {{ a.handle }}</div>
+    </span>
+    <span class="stat-col">
+      <span class="chip {{ 'ok' if a.status == 'active' else 'err' }}">{{ a.status }}</span>
+      <span>{{ row.agents }} agent{{ 's' if row.agents != 1 }} · {{ row.last|ago if row.last else 'never active' }}</span>
+    </span>
+    {% if a.id != me.id %}
+    <form method="post" action="/app/admin/accounts/{{ a.id }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      {% if a.is_admin %}<button name="action" value="unadmin">Remove admin</button>{% else %}<button name="action" value="admin">Make admin</button>{% endif %}
+      {% if a.status == 'active' %}<button class="danger" name="action" value="disable">Disable</button>{% else %}<button name="action" value="enable">Enable</button>{% endif %}
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</section>
+
+<div class="pair">
+  <div class="card">
+    <h2 class="flush">Invite someone</h2>
+    <form method="post" action="/app/admin/invite" class="row">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="grow">Email<input name="email" type="email" required placeholder="person@example.com"></label>
+      <button class="primary">Send invitation</button>
+    </form>
+    <p class="small muted flush">Registration is by invitation only. To give access to a scope at the same time, invite from the scope’s page instead.</p>
+  </div>
+  <section class="panel">
+    <div class="panel-head"><h2>Open invitations</h2></div>
+    {% for i in invites %}
+    <div class="row-link"><span class="body"><span>{{ i.email }}</span></span>
+      <span class="end">{% if i.scope_id %}<span class="scope">{{ i.scope_id }} · {{ i.role }}</span>{% else %}<span>account only</span>{% endif %}<span>expires {{ i.expires_at|when('%Y-%m-%d') }}</span></span></div>
+    {% else %}<div class="empty">None open.</div>{% endfor %}
+  </section>
+</div>
+{% endblock %}

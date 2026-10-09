@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+*.db
+.claude/
+*.egg-info/
+build/
+dist/
+.DS_Store
+deploy/local.env
+.env

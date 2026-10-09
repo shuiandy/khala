@@ -1,0 +1,37 @@
+# Khala behind Caddy, which gets and renews the TLS certificate on its own.
+#   cp .env.example .env    # then set KHALA_DOMAIN, KHALA_OWNERS and the SMTP settings
+#   docker compose up -d
+# The domain's DNS must point at this machine, and ports 80 and 443 must be open, for the certificate.
+services:
+  khala:
+    build: .
+    image: khala:local
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      KHALA_ISSUER: https://${KHALA_DOMAIN:?set KHALA_DOMAIN in .env}
+      # This container publishes no port, so only Caddy on the internal network can reach it. That is what makes
+      # trusting every peer's X-Forwarded-For safe here; publish the port and this must name the proxy instead.
+      KHALA_TRUSTED_PROXIES: "*"
+    volumes:
+      - khala-data:/var/lib/khala
+
+  caddy:
+    image: caddy:2.11
+    restart: unless-stopped
+    depends_on: [khala]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      KHALA_DOMAIN: ${KHALA_DOMAIN}
+    volumes:
+      - ./deploy/docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  khala-data:
+  caddy-data:
+  caddy-config:

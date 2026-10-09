@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>{{ title }}</h1>
+<div class="card">
+  <p>{{ message }}</p>
+  <form method="post" action="{{ action }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    {% for k, v in fields %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <input type="hidden" name="confirm" value="1">
+    <button class="{{ 'danger' if danger else 'primary' }}">{{ button }}</button>
+    <a class="button" href="{{ cancel }}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

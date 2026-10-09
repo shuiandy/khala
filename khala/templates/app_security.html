@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Security{% endblock %}
+{% block head %}<script src="/app/static/webauthn.js?v={{ js_version }}" defer></script>{% endblock %}
+{% block body %}
+{% from "_icons.html" import icon %}
+<div class="page-head">
+  <div>
+    <h1>Sign-in and security</h1>
+    {% if strong %}<p class="lede">Signing in needs a passkey, or an email code plus your authenticator app or a recovery code. An email code alone is not enough.</p>{% endif %}
+  </div>
+</div>
+{% if not strong %}
+<div class="notice warn banner">{{ icon('shield-alert') }}<span>Right now anyone who can read your email can sign in. Add a passkey or an authenticator app; after that an email code alone no longer works.</span></div>
+{% endif %}
+{% if error %}<div class="notice err">{{ error }}</div>{% endif %}
+
+{% if codes %}
+<div class="card">
+  <h2 class="flush">Your recovery codes</h2>
+  <p><b>Save these now; they are shown only once.</b> Each one works once, together with an email code, if you lose your passkeys and authenticator app.</p>
+  <div class="codes">{% for c in codes %}<div>{{ c }}</div>{% endfor %}</div>
+  <p><a class="button primary" href="/app/security">I saved them</a></p>
+</div>
+{% endif %}
+
+<div class="grid">
+  <a class="card stat-card" href="#passkeys"><span class="label"><span class="dot {{ 'ok' if passkeys }}"></span> Passkeys</span><span class="stat">{{ passkeys|length }}</span><span class="sub">{% if passkeys %}Last used {{ passkeys|map(attribute='last_used_at')|select|max|ago }}{% else %}None yet{% endif %}</span></a>
+  <a class="card stat-card" href="#totp"><span class="label"><span class="dot {{ 'ok' if has_totp }}"></span> Authenticator app</span><span class="stat">{{ 'On' if has_totp else 'Off' }}</span><span class="sub">Backup for devices without passkeys</span></a>
+  {% if strong %}
+  <a class="card stat-card" href="#recovery"><span class="label"><span class="dot {{ 'ok' if recovery_ever and recovery_left else 'warn' }}"></span> Recovery codes</span>
+    <span class="stat">{{ recovery_left if recovery_ever else 0 }} <span class="small muted">of 10</span></span>
+    <progress class="bar" value="{{ recovery_left if recovery_ever else 0 }}" max="10" aria-label="Recovery codes left"></progress></a>
+  {% endif %}
+</div>
+
+{% if confirmed %}
+<div class="notice banner" role="status">{{ icon('check') }}<span>You confirmed it’s you, so you can change these settings for a few minutes.</span></div>
+{% else %}
+<div class="notice banner"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><span>To change anything here, confirm it’s you first. The check lasts 10 minutes.</span><a class="button primary" href="/app/reauth?next=/app/security">Confirm it’s you</a></div>
+{% endif %}
+
+<section class="panel" id="passkeys">
+  <div class="panel-head"><h2>Passkeys</h2></div>
+  {% for p in passkeys %}
+  <div class="key-row">
+    <span class="key-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="9" r="4"/><path d="M11 12l9 9M17 18l2-2M15 16l2-2"/></svg></span>
+    <form method="post" action="/app/security/passkeys/{{ p.id }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input name="name" value="{{ p.name }}" maxlength="60" aria-label="Passkey name"><button name="action" value="rename">Rename</button>
+    </form>
+    <span class="when">Added {{ p.created_at|when('%Y-%m-%d') }} · used {{ p.last_used_at|ago }}</span>
+    {% if confirmed %}<form method="post" action="/app/security/passkeys/{{ p.id }}" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger" name="action" value="remove">Remove</button></form>{% endif %}
+  </div>
+  {% else %}<div class="empty">No passkeys yet.</div>{% endfor %}
+  {% if confirmed %}
+  <form method="post" action="/app/security" class="add" data-passkey-only hidden>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="row flush">
+      <label class="grow">Name for this passkey<input name="name" data-passkey-field maxlength="60" placeholder="MacBook Touch ID, iPhone, 1Password"></label>
+      <button type="button" class="primary" data-passkey="register" data-options="/app/security/passkey/options" data-verify="/app/security/passkey/verify">{{ icon('plus', 16) }}Add a passkey</button>
+    </div>
+    <p class="err small flush" data-passkey-status role="status"></p>
+  </form>
+  {% endif %}
+</section>
+
+<div class="pair">
+<section class="card" id="totp">
+  <div class="card-head"><h2>Authenticator app</h2><span class="chip {{ 'ok' if has_totp }}">{{ 'On' if has_totp else 'Off' }}</span></div>
+{% if totp_secret %}
+  <p>Scan this with your authenticator app (1Password, Google Authenticator, …), then enter the 6-digit code it shows.</p>
+  <div class="qr">{{ totp_qr|safe }}</div>
+  <p class="small muted">Can’t scan? Enter this key by hand: <code>{{ totp_secret }}</code></p>
+  <form method="post" action="/app/security/totp" class="row">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Code<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus></label>
+    <button class="primary" name="action" value="confirm">Turn on</button>
+  </form>
+{% elif has_totp %}
+  <p class="small muted">A 6-digit code from your app works with an email code when a passkey isn’t at hand.</p>
+  {% if confirmed %}<form method="post" action="/app/security/totp"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger" name="action" value="remove">Turn off</button></form>{% endif %}
+{% else %}
+  <p class="small muted">Off. Use it as a backup for devices without passkeys.</p>
+  {% if confirmed %}<form method="post" action="/app/security/totp"><input type="hidden" name="csrf" value="{{ csrf }}"><button name="action" value="start">Set up</button></form>{% endif %}
+{% endif %}
+</section>
+
+{% if strong %}
+<section class="card" id="recovery">
+  <h2 class="flush">Recovery codes</h2>
+  {% if recovery_ever %}<p class="small muted">{{ recovery_left }} of 10 unused. Each works once, with an email code, if you lose your passkeys and authenticator app.</p>{% else %}<p class="warn small">You have no recovery codes. Without them, losing your passkeys locks you out until an admin resets your account.</p>{% endif %}
+  {% if confirmed %}<form method="post" action="/app/security/recovery"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="{{ '' if recovery_ever else 'primary' }}">{{ 'Make new codes' if recovery_ever else 'Make recovery codes' }}</button></form>
+  {% if recovery_ever %}<p class="small muted">Making new codes cancels the old ones.</p>{% endif %}{% endif %}
+</section>
+{% endif %}
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>Recent sign-ins</h2></div>
+  {% for l in logins %}
+  <div class="event"><span class="time wide">{{ l.at|when('%m-%d %H:%M') }}</span><span class="what"><span>{{ l.detail or 'email' }}</span></span><span class="who"><span class="mono small">{{ l.ip_prefix }}</span></span></div>
+  {% else %}<div class="empty">None yet.</div>{% endfor %}
+</section>
+{% endblock %}

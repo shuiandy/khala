@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Review{% endblock %}
+{% block body %}
+{% macro from_line(account_id, agent_id) %}{{ who.accounts.get(account_id, '?') }}{% if agent_id %} <span class="chip">{{ who.agents.get(agent_id, '?') }}</span>{% endif %}{% endmacro %}
+<div class="page-head">
+  <div>
+    <h1>Review</h1>
+    <p class="lede">Agents leave notes in the inbox; any agent can merge them into records. Merges wait here for you unless the scope applies them directly.</p>
+  </div>
+</div>
+
+<nav class="jump" aria-label="Sections">
+  <a href="#proposed" class="{{ 'hot' if props }}">Proposed <span class="n">{{ props|length }}</span></a>
+  <a href="#conflicts" class="{{ 'hot' if conflicts }}">Conflicts <span class="n">{{ conflicts|length }}</span></a>
+  {% if applied %}<a href="#applied">Applied directly <span class="n">{{ applied|length }}</span></a>{% endif %}
+  <a href="#inbox">Inbox <span class="n">{{ notes_total }}</span></a>
+</nav>
+
+<section class="panel" id="proposed">
+  <div class="panel-head"><h2>Proposed changes</h2></div>
+  {% for p in props %}
+  <a class="row-link" href="/app/review/proposals/{{ p.id }}">
+    <span class="tag {{ 'update' if p.base_blob else 'new' }}">{{ 'Update' if p.base_blob else 'New' }}</span>
+    <span class="body">
+      <span class="name">{{ p.record }}</span>
+      {% if p.reason %}<span class="desc clamp">{{ p.reason }}</span>{% endif %}
+      <span class="meta"><span class="scope">{{ p.scope }}</span>{% if p.old_scope and p.old_scope != p.scope %}<span>from {{ p.old_scope }}</span>{% endif %}<span>{{ from_line(p.account_id, p.agent_id) }}</span></span>
+    </span>
+    <span class="end nowrap">{{ p.created_at|ago }}</span>
+  </a>
+  {% else %}<div class="empty">Nothing waiting.</div>{% endfor %}
+</section>
+
+<section class="panel" id="conflicts">
+  <div class="panel-head"><h2>Conflicts</h2></div>
+  {% for c in conflicts %}
+  <a class="row-link" href="/app/review/conflicts/{{ c.id }}">
+    <span class="tag conflict">Conflict</span>
+    <span class="body">
+      <span class="name">{{ c.record or 'no record named' }}</span>
+      <span class="desc clamp">{{ c.detail[:160] }}{% if c.detail|length > 160 %}…{% endif %}</span>
+      <span class="meta"><span class="scope">{{ c.scope }}</span></span>
+    </span>
+    <span class="end nowrap">{{ c.created_at|ago }}</span>
+  </a>
+  {% else %}<div class="empty">No conflicts.</div>{% endfor %}
+</section>
+
+{% if applied %}
+<section class="panel" id="applied">
+  <div class="panel-head"><h2>Applied directly</h2><span class="small muted">Last 14 days</span></div>
+  {% for p in applied %}
+  <a class="row-link" href="/app/review/proposals/{{ p.id }}">
+    <span class="tag applied">Applied</span>
+    <span class="body">
+      <span class="name">{{ p.record }}</span>
+      <span class="meta"><span class="scope">{{ p.scope }}</span><span>{{ from_line(p.account_id, p.agent_id) }}</span></span>
+    </span>
+    <span class="end nowrap">{{ p.created_at|ago }}</span>
+  </a>
+  {% endfor %}
+  <div class="panel-foot">These scopes apply merges directly. Undo puts a record back if nothing changed it since.</div>
+</section>
+{% endif %}
+
+<section class="panel" id="inbox">
+  <div class="panel-head"><h2>Inbox</h2><span class="small muted">{{ notes_total }} note{{ 's' if notes_total != 1 }} waiting to be merged</span></div>
+  {% for n in notes %}
+  <a class="row-link" href="/app/inbox/{{ n.id }}">
+    <span class="tag">Note</span>
+    <span class="body">
+      <span class="name">{{ n.title or n.id }}</span>
+      <span class="meta"><span class="scope">{{ n.scope }}</span><span>{{ from_line(n.account_id, n.agent_id) }}</span>
+        {% if n.guidance %}<span class="chip warn">reopened</span>{% endif %}{% if n.claim_until and n.claim_until > now %}<span class="chip">being merged</span>{% endif %}</span>
+    </span>
+    <span class="end nowrap">{{ n.created_at|ago }}</span>
+  </a>
+  {% else %}<div class="empty">The inbox is empty.</div>{% endfor %}
+  <div class="panel-foot">{% if by_scope %}By scope: {% for sc, n in by_scope %}<code>{{ sc }}</code> {{ n }}{% if not loop.last %}, {% endif %}{% endfor %}. {% endif %}Ask any agent to “merge the memory inbox”.</div>
+</section>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ r.name }}{% endblock %}
+{% block body %}
+{% from "_icons.html" import icon %}
+<p class="crumb"><a href="/app/records?scope={{ r.meta.scope }}">Records in {{ r.meta.scope }}</a></p>
+<div class="page-head">
+  <div>
+    <div class="eyebrow"><span class="mono">{{ r.name }}</span>
+      <span class="chip {{ 'ok' if r.meta.status == 'active' else 'warn' if r.meta.status == 'proposed' else '' }}">{{ r.meta.status }}</span>
+      {% if r.meta.pinned == 'true' %}<span class="chip outline">pinned</span>{% endif %}
+      {% if due %}<span class="chip warn">due</span>{% endif %}</div>
+    <h1>{{ r.meta.name or r.name }}</h1>
+    <p class="lede">{{ r.meta.description }}</p>
+  </div>
+</div>
+
+<dl class="facts">
+  <div><dt>Scope</dt><dd><a href="/app/scopes/{{ r.meta.scope }}"><code>{{ r.meta.scope }}</code></a></dd></div>
+  <div><dt>Type</dt><dd>{{ r.meta.type or '—' }}</dd></div>
+  <div><dt>Verified</dt><dd>{{ r.meta.verified or '—' }}{% if r.meta.review_after %} · every {{ r.meta.review_after }}{% endif %}</dd></div>
+  <div><dt>Blob</dt><dd class="mono">{{ r.sha[:12] }}</dd></div>
+</dl>
+
+{% if editable %}
+<div class="toolbar">
+  <a class="button primary" href="/app/records/{{ r.name }}/edit">{{ icon('edit', 15) }}Edit</a>
+  {% if r.meta.status != 'outdated' %}
+  <form method="post" action="/app/records/{{ r.name }}/deprecate">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="reason" maxlength="300" placeholder="Why it is outdated" aria-label="Why it is outdated">
+    <button>Mark outdated</button>
+  </form>
+  {% endif %}
+  {% if can_delete %}<form method="post" action="/app/records/{{ r.name }}/delete"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger">Delete</button></form>{% endif %}
+</div>
+{% elif r.meta.pinned == 'true' %}<p class="small muted">Pinned: edit it by hand in a clone of the repository.</p>{% endif %}
+
+<div class="stack">
+<div>
+<pre class="doc frontmatter">{{ front }}</pre>
+<pre class="doc">{{ body }}</pre>
+</div>
+<p class="small muted flush">Shown as plain text. Records are written by agents, so nothing in them is rendered or followed.</p>
+</div>
+
+<section class="panel">
+  <div class="panel-head"><h2>History</h2></div>
+  {% for c in history %}
+  <a class="row-link" href="/app/records/{{ r.name }}/commits/{{ c.sha }}">
+    <span class="body">
+      <span class="meta"><b class="small">{{ c.author }}</b>{% if c.agent %} <span class="chip">{{ c.agent }}</span>{% endif %}<span>{{ c.at|when }}</span></span>
+      <span class="desc">{{ c.subject }}</span>
+    </span>
+    <span class="end">diff</span>
+  </a>
+  {% else %}<div class="empty">No history.</div>{% endfor %}
+</section>
+{% endblock %}

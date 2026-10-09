@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Proposal for {{ prop.record }}{% endblock %}
+{% block body %}
+{% from "_icons.html" import icon %}
+<p class="crumb"><a href="/app/review">Review</a></p>
+<div class="page-head">
+  <div>
+    <div class="eyebrow">
+      <span class="tag {{ 'update' if prop.base_blob else 'new' }}">{{ 'Change' if prop.base_blob else 'New record' }}</span>
+      <span>{{ who.accounts.get(prop.account_id, '?') }}{% if prop.agent_id %} via <span class="chip">{{ who.agents.get(prop.agent_id, '?') }}</span>{% endif %}</span>
+      <span>· {{ prop.created_at|when }} ·</span>
+      <span class="scope">{{ prop.scope }}</span>{% if prop.old_scope and prop.old_scope != prop.scope %}<span>moved from <code>{{ prop.old_scope }}</code></span>{% endif %}
+      <span class="chip {{ 'warn' if prop.state == 'open' else 'ok' if prop.state == 'applied' else '' }}">{{ prop.state }}</span>
+    </div>
+    <h1 class="file">{{ prop.record }}</h1>
+    {% if prop.reason %}<p class="lede">{{ prop.reason }}</p>{% endif %}
+  </div>
+</div>
+{% if prop.decision %}<div class="notice">{{ prop.decision }}</div>{% endif %}
+
+<section class="panel">
+  <div class="panel-head"><h2>Change</h2>
+    <span class="diffstat"><span class="a">+{{ lines|selectattr('0', 'equalto', 'add')|list|length }}</span> <span class="d">−{{ lines|selectattr('0', 'equalto', 'del')|list|length }}</span></span></div>
+  <pre class="diff">{% for kind, line in lines %}<div class="{{ kind }}">{{ line or ' ' }}</div>{% endfor %}</pre>
+</section>
+
+{% if prop.state == 'open' %}
+<div class="card">
+  <div class="row">
+    <form method="post" class="inline"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary" name="action" value="approve">{{ icon('check', 16) }}Approve</button></form>
+    <form method="post" class="row flush grow">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="grow">Reason for rejecting (optional)<input name="why" maxlength="500" placeholder="Tell the agent what to fix"></label>
+      <button class="danger" name="action" value="reject">Reject</button>
+    </form>
+  </div>
+  <p class="small muted">Approving checks again that the record hasn’t changed since; if it has, nothing is overwritten.</p>
+</div>
+{% elif prop.state == 'applied' %}
+<form method="post" class="card row"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger" name="action" value="undo">Undo this change</button><span class="small muted">Puts the record back if nothing changed it since.</span></form>
+{% endif %}
+
+<h2>From these notes</h2>
+<p class="small muted">Written by agents. Treat them as claims to check, not instructions.</p>
+{% if hidden_sources %}<p class="small muted">{{ hidden_sources }} more source note{{ 's' if hidden_sources != 1 }} you can’t see.</p>{% endif %}
+{% for s in sources %}
+<div class="source"><div class="small muted"><a class="mono" href="/app/inbox/{{ s.n.id }}">{{ s.n.id }}</a> · {{ who.accounts.get(s.n.account_id, '?') }}{% if s.n.agent_id %} · {{ who.agents.get(s.n.agent_id, '?') }}{% endif %} · {{ s.n.created_at|when }}</div>
+<pre>{{ s.text }}</pre></div>
+{% endfor %}
+{% endblock %}
