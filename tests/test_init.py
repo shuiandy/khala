@@ -110,6 +110,21 @@ class InitTests(unittest.TestCase):
         self.assertIn("khala init", str(cm.exception.code))
         self.assertFalse((self.root / "nowhere").exists())
 
+    def test_consolidation_can_be_switched_from_the_command_line(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            instance.init("http://localhost:8100", "you@example.com", self.root / "data", self.root / "khala.env")
+        db = DB(self.root / "data" / "state" / "khala.db")
+        self.addCleanup(db.conn.close)
+        scope = db.all_scopes()[0]["id"]
+        self.assertIn("apply directly", self.run_cli("consolidation", scope, "auto"))
+        self.assertEqual(db.scope(scope)["consolidation"], "auto")
+        self.assertIn("applies-merges", self.run_cli("scopes"))
+        self.assertEqual(db.one("SELECT COUNT(*) n FROM audit_events WHERE action='scope.updated'")["n"], 1)
+        self.run_cli("consolidation", scope, "review")
+        self.assertEqual(db.scope(scope)["consolidation"], "review")
+        with self.assertRaises(SystemExit):
+            self.run_cli("consolidation", "no-such-scope", "auto")
+
     def key_env(self):
         data = self.root / "d"
         return {"KHALA_ISSUER": "http://localhost", "KHALA_REPO": str(data / "v.git"),

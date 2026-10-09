@@ -26,6 +26,8 @@ from ./khala.env when that exists. Values already in the environment win.
     khala enable alice@example.com
     khala scopes                                  scopes and owners
     khala auto-load personal-prefs on             load a scope in every session (it must have no members); off undoes it
+    khala consolidation team auto                 merged inbox notes apply directly (conflicts still wait; undo in
+                                                  Review); review makes them wait for approval again
     khala agents owner@example.com                an account's agents
     khala revoke-agent 12
     khala reset-auth alice@example.com           clear their passkeys, TOTP and recovery codes (all strong factors lost)
@@ -255,7 +257,8 @@ def main(argv=None):
     elif cmd == "scopes" and not argv:
         owners = {a["id"]: a["email"] for a in db.accounts()}
         for s in db.all_scopes():
-            flags = (" auto-load" if s["auto_load"] else "") + (" archived" if s["archived_at"] else "")
+            flags = (" auto-load" if s["auto_load"] else "") + (" applies-merges" if s["consolidation"] == "auto" else "") \
+                + (" archived" if s["archived_at"] else "")
             print("%-24s %s%s" % (s["id"], owners.get(s["owner_id"], "?"), flags))
     elif cmd == "auto-load" and len(argv) == 2 and argv[1] in ("on", "off"):
         if not db.scope(argv[0]):
@@ -267,6 +270,14 @@ def main(argv=None):
                      "invitations" % argv[0])
         else:
             print("%s was not auto-loaded" % argv[0])
+    elif cmd == "consolidation" and len(argv) == 2 and argv[1] in ("auto", "review"):
+        s = db.scope(argv[0])
+        if not s:
+            sys.exit("unknown scope %s" % argv[0])
+        if s["consolidation"] != argv[1]:
+            db.update_scope(s["id"], consolidation=argv[1])
+            db.audit("scope.updated", None, None, target=s["id"], detail={"consolidation": argv[1], "via": "cli"})
+        print("%s: merged notes %s" % (s["id"], "apply directly" if argv[1] == "auto" else "wait for approval"))
     elif cmd == "agents" and len(argv) == 1:
         for g in db.agents_for(account(argv[0])["id"]):
             ceiling = json.loads(g["ceiling"]) if g["ceiling"] else "all"

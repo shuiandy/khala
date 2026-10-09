@@ -394,7 +394,7 @@ rename (`MEMORY_*`) are still read, and the server logs a warning listing them.
 `khala init` sets up an instance, `khala serve` runs it and `khala connect` sets up clients. Day-to-day
 administration happens on the web admin; the other commands are the fallback on the server, run as the service
 user: `khala users`, `khala add`, `khala alias`, `khala grant`, `khala revoke`, `khala disable`, `khala enable`,
-`khala scopes`, `khala auto-load`, `khala agents`, `khala revoke-agent` and `khala reset-auth`. Every command
+`khala scopes`, `khala auto-load`, `khala consolidation`, `khala agents`, `khala revoke-agent` and `khala reset-auth`. Every command
 reads its settings from the environment, from `--env FILE` given first, or from `./khala.env`. Run `khala help`
 for the full list.
 

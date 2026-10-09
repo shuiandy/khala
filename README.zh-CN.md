@@ -354,7 +354,7 @@ metadata:
 
 `khala init` 建实例，`khala serve` 运行它，`khala connect` 配客户端。日常管理都在网页管理端；其余命令是服务器上的兜底
 工具，以服务用户运行：`khala users`、`khala add`、`khala alias`、`khala grant`、`khala revoke`、`khala disable`、
-`khala enable`、`khala scopes`、`khala auto-load`、`khala agents`、`khala revoke-agent` 和 `khala reset-auth`。
+`khala enable`、`khala scopes`、`khala auto-load`、`khala consolidation`、`khala agents`、`khala revoke-agent` 和 `khala reset-auth`。
 所有命令都从环境变量、放在最前面的 `--env FILE` 或 `./khala.env` 读取设置。完整列表见 `khala help`。
 
 ## 安全模型
