@@ -4,6 +4,9 @@ It takes the catalog's channels in order and uses the first one this computer ca
 command when that program is installed, merge a JSON config file (keeping a backup), or open an install link.
 Anything else is printed as steps. When a token is needed it is fetched with device authorization, so it never
 passes through the clipboard.
+
+With --local there is no server: the client starts `khala serve --stdio` itself, by absolute paths to the program
+and the settings file, since apps opened from the Dock or a launcher do not get the shell's PATH or directory.
 """
 import json
 import os
@@ -114,8 +117,24 @@ def device_token(base, client_name, say=say, browser=True, sleep=time.sleep):
     raise ConnectError("the code expired before it was approved")
 
 
-def plan(entry, url, name, token):
-    """The channels to try, in order, for this mode (token or sign-in)."""
+def local_paths(env_file, which=shutil.which, argv0=None):
+    """{"khala": program, "env": settings file} as absolute paths, for a client that starts Khala itself."""
+    if not env_file or not Path(env_file).is_file():
+        raise ConnectError("no settings file here; run `khala init` first, or pass it: khala --env FILE connect ...")
+    program = which("khala")
+    argv0 = sys.argv[0] if argv0 is None else argv0
+    if not program and Path(argv0).stem == "khala" and Path(argv0).is_file():
+        program = argv0                         # run from a virtualenv that is not activated
+    if not program:
+        raise ConnectError("the khala program is not on PATH; install it with `pipx install khala` so the client "
+                           "can start it")
+    return {"khala": os.path.abspath(program), "env": os.path.abspath(env_file)}
+
+
+def plan(entry, url, name, token, local=None):
+    """The channels to try, in order, for this mode (token, sign-in, or local)."""
+    if local:
+        return catalog.render(entry, url, name, local=local)
     want_token = token is not None
     return [ch for ch in catalog.render(entry, url, name, token) if ch["needs_token"] == want_token]
 

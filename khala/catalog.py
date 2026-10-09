@@ -1,12 +1,14 @@
 """The client catalog (clients.yaml): how each known MCP client connects, and how to recognise it when it signs in.
 
-render() fills an entry's channels for one server; identify() matches a signing-in client to an entry. A metadata
+render() fills an entry's channels for one server, or with local= its channels that start Khala on this computer over
+stdio instead (they are never shown for a server); identify() matches a signing-in client to an entry. A metadata
 document URL is a strong match (the server fetched and checked that document); a registered client name is weak,
 since any client can claim it, and only ever suggests a name and kind.
 """
 import base64
 import json
 import re
+import shlex
 from pathlib import Path
 from urllib.parse import quote
 
@@ -62,6 +64,10 @@ def validate(entries):
             text = json.dumps(ch)
             if "{token}" in text and not ch.get("needs_token"):
                 raise CatalogError("%s: %s uses {token} without needs_token" % (where, ch["label"]))
+            if ch.get("local") and (ch.get("needs_token") or "{url" in text or "{khala}" not in text
+                                    or "{env}" not in text):
+                raise CatalogError("%s: local channel %s starts {khala} with {env}, without a URL or token"
+                                   % (where, ch["label"]))
 
 
 def _fill(value, values):
@@ -82,11 +88,16 @@ def _nest(keys, leaf):
     return out
 
 
-def render_channel(ch, url, name, token=None):
+def render_channel(ch, url, name, token=None, local=None):
+    """One channel filled in. local is {"khala": program, "env": settings file}, both absolute paths."""
+    local = local or {}
     values = {"url": url, "name": name, "token": token or "YOUR_TOKEN", "url_q": quote(url, safe=""),
-              "name_q": quote(name, safe="")}
+              "name_q": quote(name, safe=""), "khala": local.get("khala", "khala"),
+              "env": local.get("env", "khala.env")}
+    if ch["type"] == "command":                 # a shell runs it, so paths with spaces stay whole
+        values.update(khala=shlex.quote(values["khala"]), env=shlex.quote(values["env"]))
     out = {"type": ch["type"], "label": _fill(ch["label"], values), "needs_token": bool(ch.get("needs_token")),
-           "confidence": ch["confidence"], "note": _fill(ch.get("note", ""), values)}
+           "local": bool(ch.get("local")), "confidence": ch["confidence"], "note": _fill(ch.get("note", ""), values)}
     if "config" in ch:
         config = json.dumps(_fill(ch["config"], values), separators=(",", ":"))
         b64 = base64.b64encode(config.encode()).decode()
@@ -106,13 +117,17 @@ def render_channel(ch, url, name, token=None):
             out["text"] = _fill(ch["snippet"], values).rstrip("\n")
     elif ch.get("snippet"):
         out["text"] = _fill(ch["snippet"], values).rstrip("\n")
+    elif ch["type"] == "connector" and "config" in ch:      # JSON to paste, escaped as JSON
+        out["text"] = config
     if ch.get("binary"):
         out["binary"] = ch["binary"]
     return out
 
 
-def render(entry, url, name, token=None):
-    return [render_channel(ch, url, name, token) for ch in entry["channels"]]
+def render(entry, url, name, token=None, local=None):
+    """The channels for a server, or with local the ones that start Khala on this computer."""
+    return [render_channel(ch, url, name, token, local) for ch in entry["channels"]
+            if bool(ch.get("local")) == bool(local)]
 
 
 def identify(entries, client_id, client_name=""):

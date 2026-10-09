@@ -16,7 +16,7 @@ class ConnectWizardTests(Base):
             self.assertIn("/app/connect/" + e["id"], index)
             page = self.client.get("/app/connect/" + e["id"])
             self.assertEqual(page.status_code, 200, e["id"])
-            if not all(ch.get("needs_token") for ch in e["channels"]):
+            if not all(ch.get("needs_token") or ch.get("local") for ch in e["channels"]):
                 self.assertIn("http://localhost/mcp", html.unescape(page.text), e["id"])
             self.assertNotIn("YOUR_TOKEN", page.text, e["id"])
         self.assertEqual(self.client.get("/app/connect/nope").status_code, 404)

@@ -10,6 +10,7 @@ runs it, and is the fallback for operations on the server.
     khala bridge URL [--token-file FILE]          stdio to a remote server, for clients that only start local
                                                   servers; the token comes from KHALA_TOKEN or the file
     khala connect CLIENT --url URL [--token]      set up a client on this computer (khala connect --list)
+    khala connect CLIENT --local                  the same for this computer's own instance, over stdio
     khala migrate-refs                            move notes and proposals to refs/khala/* (the server also
                                                   does this at startup; deploy.sh runs it with the server stopped)
 
@@ -119,12 +120,14 @@ def bridge_command(argv):
     bridge.Bridge(a.url, token).run(sys.stdin)
 
 
-def connect_command(argv):
+def connect_command(argv, env_file=None):
     p = argparse.ArgumentParser(prog="khala connect", description="Set up a client on this computer.")
     p.add_argument("client", nargs="?", help="a client id from --list")
     p.add_argument("--url", default="", help="the server, for example https://memory.example.com")
     p.add_argument("--name", default="khala", help="the server's name in the client's config (default khala)")
     p.add_argument("--token", action="store_true", help="use a token instead of signing in through the client")
+    p.add_argument("--local", action="store_true",
+                   help="no server: the client starts Khala on this computer (khala serve --stdio)")
     p.add_argument("--list", action="store_true", help="list the clients this knows")
     p.add_argument("--yes", action="store_true", help="do not ask before changing anything")
     p.add_argument("--dry-run", action="store_true", help="only say what would be done")
@@ -138,10 +141,20 @@ def connect_command(argv):
     entry = catalog.by_id(entries, a.client)
     if not entry:
         sys.exit("unknown client %s; khala connect --list shows them" % a.client)
-    if not a.url:
-        sys.exit("pass --url with the server's address")
+    if a.local and (a.url or a.token):
+        sys.exit("--local starts Khala on this computer; it takes no --url or --token")
+    if not a.url and not a.local:
+        sys.exit("pass --url with the server's address, or --local for this computer's own instance")
     ask = (lambda q: True) if a.yes else (lambda q: input(q + " [y/N] ").strip().lower() in ("y", "yes"))
     try:
+        if a.local:
+            local = connect.local_paths(env_file)
+            channels = connect.plan(entry, "", a.name, None, local=local)
+            if not channels:
+                raise connect.ConnectError("%s cannot start a local server; it needs Khala running as a server it "
+                                           "can reach, then khala connect %s --url ..." % (entry["name"], entry["id"]))
+            connect.carry_out(channels, confirm=ask, dry_run=a.dry_run)
+            return
         url = connect.endpoint(a.url)
         token = None
         if a.token or not entry["oauth"]:
@@ -157,13 +170,16 @@ def connect_command(argv):
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    env_file = None
     if argv[:1] == ["--env"]:
         if len(argv) < 2 or not os.path.exists(argv[1]):
             sys.exit("--env needs an existing settings file")
-        instance.load_env(argv[1])
+        env_file = argv[1]
         argv = argv[2:]
     elif os.path.exists("khala.env"):
-        instance.load_env("khala.env")
+        env_file = "khala.env"
+    if env_file:
+        instance.load_env(env_file)
     cmd = argv.pop(0) if argv else "users"
     if cmd == "init":
         return init_command(argv)
@@ -172,7 +188,7 @@ def main(argv=None):
     if cmd == "bridge":
         return bridge_command(argv)
     if cmd == "connect":
-        return connect_command(argv)
+        return connect_command(argv, env_file)
     if cmd == "migrate-refs" and not argv:
         s = Settings()
         moved = Store(s.get("REPO", DEFAULT_REPO), s.get("BRANCH", "main") or "main").migrate_refs()

@@ -3,8 +3,12 @@ appear only where a channel asks for one, and signing-in clients are recognised 
 import base64
 import json
 import re
+import shlex
+import tomllib
 import unittest
 from urllib.parse import parse_qs, unquote, urlparse
+
+import yaml
 
 from khala import catalog
 
@@ -32,6 +36,39 @@ class CatalogTests(unittest.TestCase):
                     self.assertEqual(json.loads(ch["text"]), catalog._nest(ch["merge"], ch["entry"]))
                 if ch.get("text", "").lstrip().startswith("{"):
                     json.loads(ch["text"])
+
+    def test_local_channels_start_khala_by_absolute_paths_and_stay_apart(self):
+        local = {"khala": "C:\\Users\\me\\My Tools\\khala.exe", "env": "/Users/me/khala data/khala.env"}
+
+        def strings(value):
+            if isinstance(value, dict):
+                return [s for v in value.values() for s in strings(v)]
+            if isinstance(value, list):
+                return [s for v in value for s in strings(v)]
+            return [value] if isinstance(value, str) else []
+
+        for e in self.entries:
+            remote = catalog.render(e, URL, NAME, TOKEN)
+            self.assertFalse(any(ch["local"] for ch in remote), e["id"])
+            for ch in catalog.render(e, "", NAME, local=local):
+                text = json.dumps(ch)
+                self.assertTrue(ch["local"] and not ch["needs_token"], (e["id"], ch["label"]))
+                self.assertIsNone(LEFTOVER.search(text), (e["id"], ch["label"]))
+                self.assertNotIn("{khala}", text)
+                self.assertNotIn("{env}", text)
+                if ch["type"] == "command":             # a shell splits it back into the same arguments
+                    args = shlex.split(ch["text"])
+                    self.assertIn(local["khala"], args)
+                    self.assertEqual(args[args.index(local["khala"]) + 1:],
+                                     ["--env", local["env"], "serve", "--stdio"])
+                parsed = (yaml.safe_load(ch["text"]) if ch.get("format") == "yaml" else
+                          tomllib.loads(ch["text"]) if ch.get("format") == "toml" else
+                          json.loads(ch["text"]) if ch["type"] in ("file", "connector") else None)
+                if parsed is not None:                  # paths survive the format's own quoting and escapes
+                    self.assertIn(local["khala"], strings(parsed), (e["id"], ch["label"]))
+                    self.assertIn(local["env"], strings(parsed), (e["id"], ch["label"]))
+                if ch["type"] == "file" and ch["format"] == "json":
+                    self.assertEqual(parsed, catalog._nest(ch["merge"], ch["entry"]))
 
     def test_tokens_appear_only_where_a_channel_asks(self):
         for e in self.entries:
@@ -87,7 +124,10 @@ class CatalogTests(unittest.TestCase):
                 dict(good, channels=[{"type": "link", "label": "x", "template": "a {token}", "confidence": "verified"}]),
                 dict(good, channels=[{"type": "file", "label": "x", "format": "json", "path": {"all": "a"},
                                       "confidence": "verified"}]),
-                dict(good, channels=[{"type": "link", "label": "x", "template": "a"}])):
+                dict(good, channels=[{"type": "link", "label": "x", "template": "a"}]),
+                dict(good, channels=[{"type": "command", "label": "x", "binary": "a", "local": True,
+                                      "template": "a {khala} --env {env} serve --stdio {url}",
+                                      "confidence": "verified"}])):
             with self.assertRaises(catalog.CatalogError):
                 catalog.validate([broken])
         with self.assertRaises(catalog.CatalogError):
