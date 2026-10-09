@@ -439,6 +439,13 @@ def make_routes(server, provider, db, mailer, scopes_for, flow, origin):
         resp.delete_cookie(browser_cookie(req), path="/")
         return resp
 
+    @server.custom_route("/oauth/callback", methods=["GET"], include_in_schema=False)
+    async def callback(request: Request):
+        """For an agent whose own callback the person's browser cannot reach (a bot on a cloud machine): it registers
+        this page as its redirect URI, and the person copies the result back to it. The code arrives in the
+        fragment (see AuthServerExtras), so this handler never sees it."""
+        return render("oauth_callback.html", csp="oauth_js")
+
     @server.custom_route("/health", methods=["GET"], include_in_schema=False)
     async def health(request: Request):
         return PlainTextResponse("ok")

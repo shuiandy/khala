@@ -272,6 +272,10 @@ Zed、goose、Hermes、opencode、Cline、Kiro、Devin Desktop、LM Studio、Jun
   按文档识别，其他客户端自己注册。两种情况都由人登录，并在同意页上选择这个 agent 能访问哪些分类。
 - **令牌。** 不能登录的客户端，由向导或 `khala connect --token` 生成令牌。命令行走设备码授权（你在网页上批准一个短码），
   令牌不经过剪贴板。
+- **云端 bot。** 跑在云机上的 agent 没有你的浏览器能到达的回调地址：那边的回环地址在这边就是你自己的电脑。
+  它应当使用设备码授权，服务器的 OAuth 元数据里公布了入口（`device_authorization_endpoint`，在令牌端点轮询）。
+  如果它只会授权码流程，就把 `https://your-host/oauth/callback` 注册为回调地址；你登录后，这个页面会显示一个地址，
+  复制给 agent 即可。授权码放在 URL 片段里，不会进服务器日志。
 - **桥接。** `khala bridge https://your-host/mcp` 让只能启动本地程序的客户端连上远程服务，环境变量里放 `KHALA_TOKEN`。
 - **本地。** `khala serve --stdio` 在本机用本地数据目录给一个人用，不需要服务器，也不用登录；
   `khala connect 客户端 --local` 负责配好它。

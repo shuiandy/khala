@@ -21,6 +21,7 @@ REFRESH_TTL = 90 * 24 * 3600
 # A rotated refresh token may be exchanged once more within this many seconds: the client may have lost the
 # response and retried. Any later reuse means a copy is in someone else's hands, and the whole chain is revoked.
 REFRESH_GRACE = 30
+REGISTRATIONS_PER_IP_HOUR = 20
 
 
 def _account(subject):
@@ -49,10 +50,11 @@ SCOPES = ["memory", "offline_access"]
 
 
 class Provider:
-    def __init__(self, db: DB, issuer: str, documents=None):
+    def __init__(self, db: DB, issuer: str, documents=None, client_ip=lambda: ""):
         self.db = db
         self.issuer = issuer.rstrip("/")
         self.documents = documents or cimd.Documents(redirect_allowed, SCOPES)
+        self.client_ip = client_ip
 
     # ---- clients ----
     async def get_client(self, client_id):
@@ -70,8 +72,14 @@ class Provider:
         if not uris or not all(redirect_allowed(u) for u in uris):
             raise RegistrationError(error="invalid_redirect_uri",
                                     error_description="redirect URIs must be https or loopback http")
-        self.db.q("INSERT OR REPLACE INTO clients(client_id, info, created) VALUES (?,?,?)",
-                  client_info.client_id, client_info.model_dump_json(), time.time())
+        self.db.q("INSERT OR REPLACE INTO clients(client_id, info, created, ip) VALUES (?,?,?,?)",
+                  client_info.client_id, client_info.model_dump_json(), time.time(), self.client_ip())
+
+    def registration_allowed(self, ip) -> bool:
+        """Dynamic registration is open to anyone, so one address gets a bounded number of clients an hour."""
+        self.db.purge_clients()
+        n = self.db.one("SELECT COUNT(*) n FROM clients WHERE ip=? AND created>?", ip, time.time() - 3600)["n"]
+        return n < REGISTRATIONS_PER_IP_HOUR
 
     # ---- authorization: park the request, send to the login page ----
     async def authorize(self, client, params: AuthorizationParams) -> str:

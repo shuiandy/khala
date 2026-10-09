@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS conflicts (
   detail TEXT NOT NULL, account_id INTEGER NOT NULL, agent_id INTEGER, created_at REAL NOT NULL,
   state TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'resolved')), resolution TEXT NOT NULL DEFAULT '',
   decided_by INTEGER, decided_at REAL);
-CREATE TABLE IF NOT EXISTS clients (client_id TEXT PRIMARY KEY, info TEXT NOT NULL, created REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS clients (client_id TEXT PRIMARY KEY, info TEXT NOT NULL, created REAL NOT NULL,
+  ip TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS pending (
   id TEXT PRIMARY KEY, client_id TEXT NOT NULL, params TEXT NOT NULL, expires REAL NOT NULL, account_id INTEGER,
   browser TEXT);
@@ -116,6 +117,7 @@ COLUMNS = [
     ("pending", "browser", "TEXT"),        # cookie hash of the browser that verified; the consent page accepts only it
     ("tokens", "rotated_at", "REAL"),      # when a refresh token was exchanged; reuse after the grace period is theft
     ("tokens", "grace_used", "INTEGER NOT NULL DEFAULT 0"),   # the one reuse allowed within the grace period
+    ("clients", "ip", "TEXT NOT NULL DEFAULT ''"),           # where a registration came from, for its rate limit
 ]
 
 
@@ -217,8 +219,19 @@ class DB:
         self.q("DELETE FROM challenges WHERE expires < ?", now)
         self.q("DELETE FROM half_logins WHERE expires < ?", now)
         self.q("DELETE FROM device_codes WHERE expires < ?", now)
+        self.purge_clients()
         self.q("DELETE FROM invites WHERE expires_at < ? AND accepted_at IS NULL", now - 30 * 86400)
         self.q("DELETE FROM audit_events WHERE at < ?", now - 400 * 86400)
+
+    def purge_clients(self, unused_for=7 * 86400):
+        """Forget registered clients that never got anywhere: no agent, no token, no code and no sign-in in progress
+        a week after they registered. Clients re-register on every retry or changed callback, and the leftovers
+        would otherwise pile up."""
+        self.q("DELETE FROM clients WHERE created < ? "
+               "AND client_id NOT IN (SELECT oauth_client_id FROM agents WHERE oauth_client_id IS NOT NULL) "
+               "AND client_id NOT IN (SELECT client_id FROM tokens) "
+               "AND client_id NOT IN (SELECT client_id FROM auth_codes) "
+               "AND client_id NOT IN (SELECT client_id FROM pending)", time.time() - unused_for)
 
     # ---- migrations ----
     def _migrate(self):
