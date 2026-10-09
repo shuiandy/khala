@@ -1,7 +1,8 @@
 """Page rendering: Jinja2 templates (autoescaped) + uniform security response headers.
 
 Only the sign-in, two-step verification and security settings pages may load scripts (passkeys require WebAuthn),
-and only this site's own webauthn.js; on every other page the CSP allows no scripts at all.
+and only this site's own webauthn.js; the OAuth callback page loads only callback.js. On every other page the CSP
+allows no scripts at all.
 """
 import hashlib
 import time
@@ -51,6 +52,8 @@ CSS = (HERE / "static" / "app.css").read_bytes()
 env.globals["css_version"] = hashlib.sha256(CSS).hexdigest()[:10]      # new URL when styles change; no stale cache
 JS = (HERE / "static" / "webauthn.js").read_bytes()
 env.globals["js_version"] = hashlib.sha256(JS).hexdigest()[:10]
+CALLBACK_JS = (HERE / "static" / "callback.js").read_bytes()
+env.globals["callback_js_version"] = hashlib.sha256(CALLBACK_JS).hexdigest()[:10]
 ICON = (HERE / "static" / "khala-icon.png").read_bytes()
 env.globals["icon_version"] = hashlib.sha256(ICON).hexdigest()[:10]
 
@@ -67,8 +70,8 @@ def stylesheet():
                     headers={"Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})
 
 
-def script():
-    return Response(JS, media_type="text/javascript",
+def script(body=JS):
+    return Response(body, media_type="text/javascript",
                     headers={"Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"})
 
 

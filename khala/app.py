@@ -64,17 +64,23 @@ class AuthServerExtras:
     """What the SDK's authorization server leaves out, which today's clients look for:
 
     - metadata: client ID metadata documents are supported, public clients authenticate with "none" (claude.ai,
-      Codex and VS Code only use metadata documents when both are advertised), and authorization responses carry
-      iss (RFC 9207);
+      Codex and VS Code only use metadata documents when both are advertised), authorization responses carry
+      iss (RFC 9207), and device authorization (RFC 8628) is offered;
     - iss on every redirect back to a client from the authorization pages, errors included, so clients that check
-      the issuer (Claude Code, Codex, Gemini CLI) accept it and ChatGPT and Codex can use their stable callbacks.
+      the issuer (Claude Code, Codex, Gemini CLI) accept it and ChatGPT and Codex can use their stable callbacks;
+    - the device code grant at the token endpoint, where RFC 8628 clients poll, answered by the device flow;
+    - a limit on dynamic registrations per address;
+    - the callback page for agents with no callback of their own reachable from the person's browser (a bot on a
+      cloud machine): the code is moved into the fragment, so it never reaches a server or proxy log.
     """
     METADATA = "/.well-known/oauth-authorization-server"
     AUTH_PAGES = ("/authorize", "/login", "/consent")
+    CALLBACK = "/oauth/callback"
 
-    def __init__(self, app, metadata):
-        self.app, self.metadata = app, metadata
+    def __init__(self, app, metadata, provider=None):
+        self.app, self.metadata, self.provider = app, metadata, provider
         self.issuer = metadata["issuer"]
+        self.callback = urlsplit(self.issuer.rstrip("/") + self.CALLBACK)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -82,6 +88,16 @@ class AuthServerExtras:
         if scope["path"] == self.METADATA and scope["method"] in ("GET", "HEAD"):
             return await JSONResponse(self.metadata, headers={
                 "Cache-Control": "public, max-age=3600", "Access-Control-Allow-Origin": "*"})(scope, receive, send)
+        if scope["path"] == "/register" and scope["method"] == "POST" and self.provider:
+            client = scope.get("client")
+            if not self.provider.registration_allowed(client[0] if client else ""):
+                return await JSONResponse({"error": "too_many_requests", "error_description":
+                                           "too many client registrations from this address; reuse your client_id "
+                                           "or try again later"}, status_code=429,
+                                          headers={"Cache-Control": "no-store", "Retry-After": "3600"})(
+                    scope, receive, send)
+        if scope["path"] == "/token" and scope["method"] == "POST":
+            return await self.token(scope, receive, send)
         if scope["path"] not in self.AUTH_PAGES:
             return await self.app(scope, receive, send)
 
@@ -92,12 +108,42 @@ class AuthServerExtras:
             await send(message)
         return await self.app(scope, receive, with_iss)
 
+    async def token(self, scope, receive, send):
+        """Read the form once; a device code grant goes to the device flow, anything else on to the SDK."""
+        body, more = b"", True
+        while more:
+            message = await receive()
+            if message["type"] != "http.request":
+                return
+            body += message.get("body", b"")
+            more = message.get("more_body", False)
+            if len(body) > 64 * 1024:
+                return await JSONResponse({"error": "invalid_request"}, status_code=413)(scope, receive, send)
+        try:
+            grant = parse_qs(body.decode("latin-1")).get("grant_type", [""])[0]
+        except ValueError:
+            grant = ""
+        if grant == device.GRANT:
+            scope = dict(scope, path="/device/token", raw_path=b"/device/token")
+        sent = False
+
+        async def replay():
+            nonlocal sent
+            if sent:
+                return await receive()
+            sent = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        return await self.app(scope, replay, send)
+
     def add_iss(self, location):
         target = urlsplit(location.decode("latin-1"))
         params = parse_qs(target.query)
         if target.scheme not in ("http", "https") or "iss" in params or not ({"code", "error"} & set(params)):
             return location                     # our own pages, or not an authorization response
         query = target.query + ("&" if target.query else "") + urlencode({"iss": self.issuer})
+        if (target.scheme, target.netloc, target.path) == (self.callback.scheme, self.callback.netloc,
+                                                           self.callback.path):
+            return urlunsplit(target._replace(query="", fragment=query)).encode("latin-1")
         return urlunsplit(target._replace(query=query)).encode("latin-1")
 
 
@@ -110,6 +156,8 @@ def auth_metadata(cfg):
     out["token_endpoint_auth_methods_supported"] = ["none", "client_secret_post", "client_secret_basic"]
     out["client_id_metadata_document_supported"] = True
     out["authorization_response_iss_parameter_supported"] = True
+    out["device_authorization_endpoint"] = cfg.issuer.rstrip("/") + "/device/code"
+    out["grant_types_supported"] = out.get("grant_types_supported", []) + [device.GRANT]
     return out
 
 
@@ -253,7 +301,7 @@ def create_app(cfg: Config | None = None, mailer=None, local=None):
     db.purge()
     memory = Memory(db, store, cfg.git_pusher, cfg.push_enforce)
     inbox = Inbox(db, store, memory, lease=cfg.lease_minutes * 60, notes_per_hour=cfg.notes_per_hour)
-    provider = Provider(db, cfg.issuer)
+    provider = Provider(db, cfg.issuer, client_ip=current_ip.get)
     if mailer is None:
         s = cfg.smtp
         mailer = {"fake": FakeMailer, "log": LogMailer}.get(cfg.mailer, lambda: SMTPMailer(
@@ -785,7 +833,7 @@ def create_app(cfg: Config | None = None, mailer=None, local=None):
         stateless_http=True, json_response=True,
         transport_security=TransportSecuritySettings(allowed_hosts=cfg.allowed_hosts))
     app.add_middleware(ClientIP)
-    app.add_middleware(AuthServerExtras, metadata=auth_metadata(cfg))
+    app.add_middleware(AuthServerExtras, metadata=auth_metadata(cfg), provider=provider)
     memory.records()                                    # adopt scopes and write the hook snapshot at startup
     inbox.reconcile()                                   # restore notes that reached Git but not the state database
     app.state.db, app.state.store, app.state.mailer, app.state.provider = db, store, mailer, provider

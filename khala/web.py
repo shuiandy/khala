@@ -26,7 +26,7 @@ from .db import REVIEW_MODES, ROLES, SCOPE_ID, digest, new_secret
 from .auth import AuthError, otpauth_uri, qr_svg
 from .login import check_code, client_ip, json_error, read_json, send_code
 from .login import same_origin as request_from_site
-from .ui import brand_icon, render, script, stylesheet
+from .ui import CALLBACK_JS, brand_icon, render, script, stylesheet
 
 SESSION_COOKIE = "ms_session"
 LOGIN_COOKIE = "ms_login"
@@ -206,6 +206,10 @@ def make_routes(server, cfg, db, store, memory, mailer, flow, inbox, provider, d
     @route("/app/static/webauthn.js")
     async def js(request: Request):
         return script()
+
+    @route("/app/static/callback.js")
+    async def callback_js(request: Request):
+        return script(CALLBACK_JS)
 
     def login_page(step, nonce, nxt, email="", error="", account=None):
         return render("login_steps.html", csp="app_js", step=step, action="/app/login",

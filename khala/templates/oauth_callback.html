@@ -1,0 +1,14 @@
+{% extends "auth_base.html" %}
+{% block title %}Finish connecting{% endblock %}
+{% block head %}<script src="/app/static/callback.js?v={{ callback_js_version }}" defer></script>{% endblock %}
+{% block body %}
+<h1>Finish connecting</h1>
+<p id="callback-none">Nothing to hand back here. Start the connection again from your agent.</p>
+<div id="callback-result" hidden>
+  <p id="callback-error" hidden>The sign-in did not go through. Give this to your agent anyway, so it knows why.</p>
+  <p>Copy this address and paste it back to the agent that asked you to sign in. It works once, for a few minutes,
+  and only for that agent.</p>
+  <textarea id="callback-url" rows="4" readonly></textarea>
+  <p><button type="button" id="callback-copy">Copy</button></p>
+</div>
+{% endblock %}

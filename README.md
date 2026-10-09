@@ -306,6 +306,11 @@ How clients sign in:
 - **A token.** For clients that cannot sign in, the wizard or `khala connect --token` creates one. The command
   line gets it through device authorization (you approve a short code on the web), so it never goes through the
   clipboard.
+- **Cloud bots.** An agent on a cloud machine has no callback your browser can reach: a loopback address there
+  is your own computer here. It should use device authorization, which the server's OAuth metadata advertises
+  (`device_authorization_endpoint`, polled at the token endpoint). If it only knows the authorization code flow,
+  it registers `https://your-host/oauth/callback` as its redirect URI; after you sign in, that page shows the
+  address to paste back to the agent. The code travels in the URL fragment, so it never reaches a server log.
 - **The bridge.** `khala bridge https://your-host/mcp` lets a client that can only start local programs reach a
   remote server, with `KHALA_TOKEN` in its environment.
 - **Local.** `khala serve --stdio` serves one person on this computer from a local data directory, with no
