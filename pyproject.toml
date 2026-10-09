@@ -1,6 +1,6 @@
 [project]
 name = "khala"
-version = "0.3.0"
+version = "0.4.0"
 description = "Shared long-term memory for AI agents: Markdown + Git, per-scope access, web admin, remote MCP"
 readme = "README.md"
 license = "Apache-2.0"
