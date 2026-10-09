@@ -37,8 +37,9 @@ The name comes from the Khala of StarCraft's protoss, the sacred link that joins
   narrowed by the agent's own ceiling, and it can be revoked or have its changes undone in one place.
 - **Notes first, records after review.** Agents leave notes in an inbox at the end of a task. Any agent can later
   consolidate notes into records; the result becomes a proposal a person approves (or a scope can opt into
-  automatic approval). Contradictions become conflicts for a person to settle. A Claude Code plugin reminds Claude
-  to leave notes without being asked.
+  automatic approval). Contradictions become conflicts for a person to settle. What waits for you comes to the
+  conversation you are already in: your agent mentions it, walks you through it, and your app asks you to confirm.
+  A Claude Code plugin reminds Claude to leave notes without being asked.
 - **Strong sign-in without passwords.** Passkeys first, TOTP and recovery codes as backup, email codes to get
   started. OAuth consent is bound to the browser that signed in.
 - **Git all the way down.** Every change is a commit with the agent and its reason in the trailers. A local
@@ -330,7 +331,20 @@ only the new part of the session's transcript on this computer, sends nothing an
 The server's MCP instructions tell agents how to use the memory: look up the relevant scope's index at the start
 of a task, read only the few records that matter, and leave a note at the end. The tools are `memory_scopes`,
 `memory_index`, `memory_search`, `memory_read`, `memory_history`, `memory_note`, `memory_inbox`,
-`memory_consolidate`, `memory_write` and `memory_deprecate`. Clients that show MCP prompts also get the routines
+`memory_consolidate`, `memory_write`, `memory_deprecate`, `memory_review` and `memory_decide`.
+
+### Decisions without opening the web page
+
+When something needs your decision (a proposed change in a scope that waits for approval, a record that would load
+in every session, a conflict), `memory_scopes` says so with `waiting_for_you`, and agents are told to mention it once
+at a natural break. Say yes, and the agent lists the items with `memory_review`, explains them, and passes your answer
+to `memory_decide`. Before anything changes, the server asks your app to show you a confirmation it wrote itself,
+naming every item and its version (MCP form elicitation); the model cannot answer it. Apps that cannot show one get
+a link to the Review page instead. Unattended agents cannot decide, an agent only decides what it may read and
+change, and approved changes can be undone on the Review page for 14 days.
+
+To have fewer decisions at all, let a scope apply merges directly (on its page, or `khala consolidation SCOPE auto`):
+merges land at once, conflicts still wait, and each one can be undone. Clients that show MCP prompts also get the routines
 as commands (`recall`, `remember`, `tidy_inbox`), and clients that attach resources can read `khala://guide`, a
 scope's index and single records.
 
@@ -411,6 +425,10 @@ untrusted until a person has looked at it.
 - **Injection has to pass a person.** Notes are data from other agents and the server tells agents never to
   follow instructions in them. Consolidated changes are proposals outside `main` until approved, and conflicts
   always need a person.
+- **Decisions in a conversation are confirmed by the app, not the model.** `memory_decide` changes nothing until
+  the person's app has shown them the server's own summary and they accepted it. That is weaker than the web page,
+  since an app can be set up to answer such forms itself, so it is refused for unattended agents, limited to what
+  the agent may change, recorded with the agent's name, and undoable.
 - **Mistakes are cheap.** Every change is a commit naming its agent and reason. One commit, or everything an agent
   did over a period, can be undone without touching later work by others.
 - **Secrets stay out.** Writes that look like credentials, and records over 64 KB, are refused by the MCP server

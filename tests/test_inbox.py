@@ -107,14 +107,19 @@ class InboxTests(Base):
         self.assertIn("edited in a mirror", git(self.hub, "show", "main:project_audit.md"))
         self.assertEqual(self.app.state.inbox.proposal(pid)["state"], "stale")
 
-    def test_new_record_in_auto_load_scope_still_needs_the_mac_approval(self):
+    def test_the_owner_approving_a_new_auto_loaded_record_makes_it_active_in_one_step(self):
         t = self.login(OWNER)[0]["access_token"]
         nid = self.note(t, "global", "Prefer short commit messages.")["id"]
         self.claim(t)
         pid = self.call(t, "memory_write", name="feedback_commits.md", notes=[nid], content=rec("global"))["proposal"]
+        self.assertIn("status: proposed", git(self.hub, "show", "refs/khala/proposals/%s:feedback_commits.md" % pid))
         self.web_login(OWNER)
         self.post("/app/review/proposals/" + pid, {"action": "approve"}, page="/app/review/proposals/" + pid)
-        self.assertIn("status: proposed", git(self.hub, "show", "main:feedback_commits.md"))
+        self.assertIn("status: active", git(self.hub, "show", "main:feedback_commits.md"))
+        self.assertIn("Approved-By: " + OWNER, git(self.hub, "log", "-1", "--format=%B", "main"))
+        self.assertIn("Undo this change", self.client.get("/app/review/proposals/" + pid).text)
+        self.post("/app/review/proposals/" + pid, {"action": "undo", "confirm": "1"}, page="/app/review/proposals/" + pid)
+        self.assertNotIn("feedback_commits.md", git(self.hub, "ls-tree", "--name-only", "main"))
 
     def test_only_maintainers_review(self):
         self.db.set_grant("team", self.alice_id, "editor", self.owner_id)

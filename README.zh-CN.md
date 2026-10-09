@@ -34,8 +34,8 @@ Khala 是自托管的共享长期记忆，给你和团队用的各种 AI agent �
 - **有上限的 agent。** 每个连上来的客户端都是某个人的 agent。它的权限是这个人的权限再收窄到 agent 自己的
   上限，可以在一个地方吊销它或撤销它做过的改动。
 - **先记笔记，审核后再成记录。** agent 在任务结束时往收件箱里记笔记。之后任何 agent 都能把笔记整合成记录，
-  结果变成提案等人批准（也可以给某个分类开自动通过）。互相矛盾的内容变成冲突，由人裁决。Claude Code 插件会
-  提醒 Claude 主动记笔记。
+  结果变成提案等人批准（也可以给某个分类开自动通过）。互相矛盾的内容变成冲突，由人裁决。等你决定的事会来到你
+  正在用的对话里：agent 会提一句、带你过一遍，由你的应用请你确认。Claude Code 插件会提醒 Claude 主动记笔记。
 - **不用密码的强登录。** passkey 为主，TOTP 和恢复码作后备，第一次用邮件验证码进门。OAuth 同意页绑定在
   完成登录的那个浏览器上。
 - **从头到尾都是 Git。** 每次改动都是一个提交，agent 和理由写在提交尾注里。仓库的本地克隆可以当镜像，
@@ -292,7 +292,18 @@ claude plugin install khala --marketplace shuiandy/khala
 
 服务通过 MCP instructions 告诉 agent 怎么用记忆：任务开始时查相关分类的索引，只读真正相关的几条记录，结束时记一条笔记。
 工具有 `memory_scopes`、`memory_index`、`memory_search`、`memory_read`、`memory_history`、`memory_note`、
-`memory_inbox`、`memory_consolidate`、`memory_write` 和 `memory_deprecate`。支持 MCP prompts 的客户端还能把这些流程
+`memory_inbox`、`memory_consolidate`、`memory_write`、`memory_deprecate`、`memory_review` 和 `memory_decide`。
+
+### 不打开网页也能做决定
+
+有事要你决定时（等批准的分类里的提议改动、会加载进每个会话的记录、冲突），`memory_scopes` 会用 `waiting_for_you`
+标出来，服务端说明让 agent 在合适的空当提一次。你同意后，agent 用 `memory_review` 列出这些事、讲清楚，再把你的
+回答交给 `memory_decide`。真正改动之前，服务器会请你的应用弹出一个由服务器自己写的确认框，列出每一项和它的版本
+（MCP 表单 elicitation），模型没法替你回答。弹不出确认框的应用会改为给你审核页的链接。无人值守的 agent 不能做
+决定，agent 只能决定它能读、能改的内容，批准的改动 14 天内可以在审核页撤销。
+
+想让要决定的事本身变少，可以让分类直接应用整合（在分类页设置，或 `khala consolidation 分类 auto`）：整合立即
+生效，冲突仍然等人，每一条都能撤销。支持 MCP prompts 的客户端还能把这些流程
 当成命令用（`recall`、`remember`、`tidy_inbox`），支持资源的客户端可以读 `khala://guide`、某个分类的索引和单条记录。
 
 ## 记录
@@ -366,6 +377,9 @@ agent 读到的记忆会影响它之后做的每件事，所以 Khala 把 agent 
 - **看不见，而不是被禁止。** 你读不到的分类里的记录，不会出现在索引、搜索和历史里，报错也不会透露它是否存在。
 - **注入必须过人这一关。** 笔记是别的 agent 写的数据，服务明确告诉 agent 不要执行其中的指令。整合出的改动在批准前是
   `main` 之外的提案，冲突永远要人裁决。
+- **对话里的决定由应用确认，不由模型确认。** `memory_decide` 在你的应用把服务器写的摘要给你看过、你接受之前，
+  什么都不改。这比网页弱一些，因为应用可以被设置成自己回答这类表单，所以它不对无人值守的 agent 开放，只能动
+  agent 有权修改的内容，会记下是哪个 agent，而且可以撤销。
 - **犯错代价低。** 每次改动都是一个写明 agent 和理由的提交。单个提交，或某个 agent 一段时间内的全部改动，都能撤销，
   而且不碰别人后来的工作。
 - **凭据进不来。** 像凭据的写入和超过 64 KB 的记录，MCP 服务和 Git 钩子都会拒收。

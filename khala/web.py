@@ -52,6 +52,7 @@ MESSAGES = {
     "approved": "Approved. The record now has the change.", "rejected": "Proposal rejected.",
     "stale": "The record changed after this proposal was made, so it was not applied. The notes can be merged again.",
     "undone": "Change undone.", "resolved": "Conflict resolved.", "saved": "Saved.",
+    "candidate-rejected": "Rejected. The record was removed; its history keeps it.",
     "deprecated": "Marked outdated.", "deleted": "Record deleted. It stays in the history.",
 }
 
@@ -1344,8 +1345,9 @@ def make_routes(server, cfg, db, store, memory, mailer, flow, inbox, provider, d
         me = ctx.me
         who = names()
         props = [r for r in db.q("SELECT * FROM proposals WHERE state='open' ORDER BY created_at") if can_review(me, r)]
-        applied = [r for r in db.q("SELECT * FROM proposals WHERE state='applied' AND created_at>? ORDER BY created_at "
-                                   "DESC", time.time() - 14 * 86400) if can_review(me, r)]
+        applied = [r for r in db.q("SELECT * FROM proposals WHERE state IN ('applied', 'approved') AND "
+                                   "COALESCE(decided_at, created_at)>? ORDER BY COALESCE(decided_at, created_at) DESC",
+                                   time.time() - 14 * 86400) if can_review(me, r)]
         conflicts = [c for c in db.q("SELECT * FROM conflicts WHERE state='open' ORDER BY created_at")
                      if inbox.reviewable(me, c["scope"])]
         notes = [n for n in db.q("SELECT * FROM notes WHERE state='new' ORDER BY created_at") if inbox.can_see(me, n)]
@@ -1353,7 +1355,20 @@ def make_routes(server, cfg, db, store, memory, mailer, flow, inbox, provider, d
         for n in notes:
             by_scope[n["scope"]] = by_scope.get(n["scope"], 0) + 1
         return ctx.render("app_review.html", props=props, applied=applied, conflicts=conflicts, notes=notes[:100],
-                          notes_total=len(notes), by_scope=sorted(by_scope.items()), who=who, now=time.time())
+                          notes_total=len(notes), by_scope=sorted(by_scope.items()), who=who, now=time.time(),
+                          candidates=inbox.candidates(me))
+
+    @route("/app/review/candidates", ("POST",))
+    @page
+    async def candidate(ctx):
+        name, action = ctx.form.get("name", ""), ctx.form.get("action")
+        if action not in ("approve", "reject"):
+            return back("/app/review")
+        try:
+            inbox.settle_candidate(ctx.me, name, action == "approve")
+        except InboxError as exc:
+            return ctx.render("app_message.html", status=409, title="Not applied", message=str(exc), back="/app/review")
+        return back("/app/review", "approved" if action == "approve" else "candidate-rejected")
 
     def note_rows(me, ids):
         """Source notes referenced by proposals and conflicts: a reference does not pass on read access, so each
@@ -1382,7 +1397,7 @@ def make_routes(server, cfg, db, store, memory, mailer, flow, inbox, provider, d
                 if action == "reject" and prop["state"] == "open":
                     inbox.reject(ctx.me, prop, ctx.form.get("why", ""))
                     return back("/app/review", "rejected")
-                if action == "undo" and prop["state"] == "applied":
+                if action == "undo" and prop["state"] in ("applied", "approved"):
                     if not ctx.form.get("confirm"):
                         return confirm(ctx, "Undo change", "Put %s back the way it was before this consolidation?%s"
                                        % (prop["record"], "" if prop["base_blob"] else " It was created by this "

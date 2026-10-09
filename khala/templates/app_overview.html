@@ -45,7 +45,7 @@
   <a class="row-link" href="/app/records/{{ r.name }}"><span class="tag due">Due</span><span class="body"><span class="name">{{ r.name }}</span><span class="desc">Verified {{ r.meta.verified }}{% if r.meta.review_after %}, review every {{ r.meta.review_after }}{% endif %}</span></span><span class="end"><span class="scope">{{ r.meta.scope }}</span></span></a>
   {% endfor %}
   {% if not waiting and not review and not due %}<div class="empty">All clear.</div>{% endif %}
-  {% if review %}<div class="panel-foot">Proposed records in auto-loaded scopes are approved by their owner, by hand in a clone of the repository.</div>{% endif %}
+  {% if review %}<div class="panel-foot">Proposed records in auto-loaded scopes load everywhere once approved: <a href="/app/review#candidates">approve or reject them</a>, here or by asking your agent.</div>{% endif %}
   {% if due_total > due|length %}<div class="panel-foot"><a href="/app/records?due=1">All {{ due_total }} records due for review</a></div>{% endif %}
   {% if queue.notes %}<div class="panel-foot">{{ queue.notes }} note{{ 's' if queue.notes != 1 }} in the inbox. Ask any agent to “merge the memory inbox”.</div>{% endif %}
 </section>

@@ -166,6 +166,15 @@ def check_write(text, existing_text, can_write, is_auto_load, today=None):
     return text, notes
 
 
+def activate(text):
+    """A person approved a proposed record: status becomes active. proposed_at stays, as approving on a mirror
+    leaves it. Only for decisions a person confirmed; agents never activate records in an auto-loaded scope."""
+    text = re.sub(r"^(  status:)[ \t]*\S*[ \t]*$", r"\1 active", text, count=1, flags=re.M)
+    if meta(text)["status"] != "active" or ambiguities(text):
+        raise RuleError("could not set status: active; " + _ambiguity_hint(text, ["status"]).split("; ", 1)[1])
+    return text
+
+
 def deprecate(text, reason, today=None):
     """Mark a record outdated with a reason (expired_reason, the same field mirror clients use for auto-expiry)."""
     today = today or clock.today().isoformat()

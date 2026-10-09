@@ -294,6 +294,8 @@ class Inbox:
             if current != prop["base_blob"]:
                 raise Conflict("stale")
             out, _ = rules.check_write(text, existing.text if existing else None, p.can_write, p.is_auto_load)
+            if self._owns_auto_load(p, rules.meta(out)["scope"]) and rules.meta(out)["status"] == "proposed":
+                out = rules.activate(out)       # the owner's approval is the approval; no second step on a mirror
             return out
 
         # Idempotent: a previous approval reached Git but not the state database (interrupted); don't call it stale
@@ -302,23 +304,60 @@ class Inbox:
             self.db.q("UPDATE proposals SET commit_sha=? WHERE id=?", done["sha"], prop["id"])
             self._decide(prop, "approved", p, "applied earlier; status repaired")
             return "approved"
+        trailers = {"Notes": " ".join(json.loads(prop["note_ids"])), "Proposal": prop["id"], "Approved-By": p.email}
+        if p.agent_id is not None:
+            trailers["Approved-Via"] = "%s (%d)" % (p.agent_label, p.agent_id)
         try:
             blob, commit, _ = self.store.write(
                 prop["record"], prepare, proposer["name"], proposer["email"],
                 "Consolidate memory: %s" % prop["record"][:-3], agent=(agent["name"] if agent else "web", prop["agent_id"]),
-                trailers={"Notes": " ".join(json.loads(prop["note_ids"])), "Proposal": prop["id"],
-                          "Approved-By": p.email}, committer=(p.name, p.email))
+                trailers=trailers, committer=(p.name, p.email))
         except Conflict:
             self._decide(prop, "stale", p, "the record changed after the proposal was made")
             return "stale"
         except rules.RuleError as exc:
             raise InboxError(str(exc))
-        self.db.q("UPDATE proposals SET commit_sha=? WHERE id=?", commit, prop["id"])
+        # what landed (it may now be active), so undo can tell whether the record still holds this change
+        self.db.q("UPDATE proposals SET commit_sha=?, new_blob=COALESCE(?, new_blob) WHERE id=?", commit, blob, prop["id"])
         self._decide(prop, "approved", p)
         return "approved"
 
     def reject(self, p, prop, why=""):
         self._decide(prop, "rejected", p, why)
+
+    # ---------- Proposed records in auto-loaded scopes ----------
+    def _owns_auto_load(self, p, scope):
+        return bool(scope) and p.is_auto_load(scope) and p.role(scope) == "owner"
+
+    def candidates(self, p):
+        """Proposed records in auto-loaded scopes the person owns: they load into every session only once the owner
+        approves them, so they wait here."""
+        return sorted((r for r in self.memory.records().values()
+                       if r.meta["status"] == "proposed" and self._owns_auto_load(p, r.meta["scope"])
+                       and p.can_read(r.meta["scope"])), key=lambda r: r.name)
+
+    def settle_candidate(self, p, name, approve, why=""):
+        """The owner approves a proposed record (status active) or turns it down (the file is removed; history keeps
+        it). Refused unless the record is still a proposed record in an auto-loaded scope this person owns."""
+        def prepare(existing):
+            if (existing is None or existing.meta["status"] != "proposed"
+                    or not self._owns_auto_load(p, existing.meta["scope"])):
+                raise Conflict("not a candidate")
+            return rules.activate(existing.text) if approve else None
+
+        verb = "Approve" if approve else "Reject"
+        trailers = {"Approved-By" if approve else "Rejected-By": p.email}
+        if p.agent_id is not None:
+            trailers["Approved-Via" if approve else "Rejected-Via"] = "%s (%d)" % (p.agent_label, p.agent_id)
+        try:
+            self.store.write(name, prepare, p.name, p.email, "%s memory: %s%s" % (verb, name[:-3],
+                             (" (%s)" % why[:200]) if why else ""), agent=(p.agent_label, p.agent_id), trailers=trailers)
+        except Conflict:
+            raise InboxError("%s is no longer waiting for your approval" % name)
+        except rules.RuleError as exc:
+            raise InboxError(str(exc))
+        self.db.audit("record.approved" if approve else "record.rejected", p.id, p.agent_id, target=name,
+                      detail={"why": why[:300]} if why else "")
 
     def undo(self, p, prop):
         """Undo an applied consolidation. Only while the record still holds that change's result, write back the
@@ -341,7 +380,7 @@ class Inbox:
         self.db.q("UPDATE proposals SET state=?, decided_by=?, decided_at=?, decision=? WHERE id=?",
                   state, p.id, time.time(), (why or "")[:1000], prop["id"])
         # Keep refs/khala/proposals/<id>: the only ref to a rejected proposal; without it gc purges the content from audits
-        self.db.audit("proposal." + state, p.id, None, target=prop["record"],
+        self.db.audit("proposal." + state, p.id, p.agent_id, target=prop["record"],
                       detail={"scope": prop["scope"], "proposal": prop["id"]})
         if state in ("stale", "rejected", "undone"):
             self._settle_notes(prop, state, why)
@@ -386,5 +425,5 @@ class Inbox:
             raise InboxError("unknown action")
         self.db.q("UPDATE conflicts SET state='resolved', resolution=?, decided_by=?, decided_at=? WHERE id=?",
                   action + (": " + guidance if guidance else ""), p.id, time.time(), conflict["id"])
-        self.db.audit("conflict.resolved", p.id, None, target=conflict["record"] or conflict["id"],
+        self.db.audit("conflict.resolved", p.id, p.agent_id, target=conflict["record"] or conflict["id"],
                       detail={"scope": conflict["scope"], "action": action})

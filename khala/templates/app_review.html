@@ -12,7 +12,8 @@
 <nav class="jump" aria-label="Sections">
   <a href="#proposed" class="{{ 'hot' if props }}">Proposed <span class="n">{{ props|length }}</span></a>
   <a href="#conflicts" class="{{ 'hot' if conflicts }}">Conflicts <span class="n">{{ conflicts|length }}</span></a>
-  {% if applied %}<a href="#applied">Applied directly <span class="n">{{ applied|length }}</span></a>{% endif %}
+  {% if candidates %}<a href="#candidates" class="hot">To load everywhere <span class="n">{{ candidates|length }}</span></a>{% endif %}
+  {% if applied %}<a href="#applied">Applied <span class="n">{{ applied|length }}</span></a>{% endif %}
   <a href="#inbox">Inbox <span class="n">{{ notes_total }}</span></a>
 </nav>
 
@@ -46,12 +47,30 @@
   {% else %}<div class="empty">No conflicts.</div>{% endfor %}
 </section>
 
+{% if candidates %}
+<section class="panel" id="candidates">
+  <div class="panel-head"><h2>To load in every session</h2><span class="small muted">Proposed records in auto-loaded scopes</span></div>
+  {% for r in candidates %}
+  <div class="row-link">
+    <span class="tag proposed">Proposed</span>
+    <span class="body">
+      <a class="name" href="/app/records/{{ r.name }}">{{ r.name }}</a>
+      <span class="desc clamp">{{ r.meta.description }}</span>
+      <span class="meta"><span class="scope">{{ r.meta.scope }}</span>{% if r.meta.proposed_at %}<span>proposed {{ r.meta.proposed_at }}</span>{% endif %}</span>
+    </span>
+    <form method="post" action="/app/review/candidates" class="end row"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="name" value="{{ r.name }}"><button name="action" value="approve">Approve</button><button class="danger" name="action" value="reject">Reject</button></form>
+  </div>
+  {% endfor %}
+  <div class="panel-foot">Approving makes a record active, so it loads in every session. Rejecting removes it; its history keeps it.</div>
+</section>
+{% endif %}
+
 {% if applied %}
 <section class="panel" id="applied">
-  <div class="panel-head"><h2>Applied directly</h2><span class="small muted">Last 14 days</span></div>
+  <div class="panel-head"><h2>Applied</h2><span class="small muted">Last 14 days</span></div>
   {% for p in applied %}
   <a class="row-link" href="/app/review/proposals/{{ p.id }}">
-    <span class="tag applied">Applied</span>
+    <span class="tag applied">{{ 'Approved' if p.state == 'approved' else 'Applied' }}</span>
     <span class="body">
       <span class="name">{{ p.record }}</span>
       <span class="meta"><span class="scope">{{ p.scope }}</span><span>{{ from_line(p.account_id, p.agent_id) }}</span></span>
@@ -59,7 +78,7 @@
     <span class="end nowrap">{{ p.created_at|ago }}</span>
   </a>
   {% endfor %}
-  <div class="panel-foot">These scopes apply merges directly. Undo puts a record back if nothing changed it since.</div>
+  <div class="panel-foot">Merges applied directly, and proposals you approved. Undo puts a record back if nothing changed it since.</div>
 </section>
 {% endif %}
 

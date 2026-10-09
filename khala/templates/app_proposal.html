@@ -10,7 +10,7 @@
       <span>{{ who.accounts.get(prop.account_id, '?') }}{% if prop.agent_id %} via <span class="chip">{{ who.agents.get(prop.agent_id, '?') }}</span>{% endif %}</span>
       <span>· {{ prop.created_at|when }} ·</span>
       <span class="scope">{{ prop.scope }}</span>{% if prop.old_scope and prop.old_scope != prop.scope %}<span>moved from <code>{{ prop.old_scope }}</code></span>{% endif %}
-      <span class="chip {{ 'warn' if prop.state == 'open' else 'ok' if prop.state == 'applied' else '' }}">{{ prop.state }}</span>
+      <span class="chip {{ 'warn' if prop.state == 'open' else 'ok' if prop.state in ('applied', 'approved') else '' }}">{{ prop.state }}</span>
     </div>
     <h1 class="file">{{ prop.record }}</h1>
     {% if prop.reason %}<p class="lede">{{ prop.reason }}</p>{% endif %}
@@ -36,7 +36,7 @@
   </div>
   <p class="small muted">Approving checks again that the record hasn’t changed since; if it has, nothing is overwritten.</p>
 </div>
-{% elif prop.state == 'applied' %}
+{% elif prop.state in ('applied', 'approved') %}
 <form method="post" class="card row"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="danger" name="action" value="undo">Undo this change</button><span class="small muted">Puts the record back if nothing changed it since.</span></form>
 {% endif %}
 
