@@ -106,7 +106,14 @@ class DecisionTests(Base):
         for reply in ({"action": "decline"}, {"action": "cancel"},
                       {"action": "accept", "content": {"confirm": False}}):
             _, result = self.decide({"approve": [pid]}, reply=reply)
-            self.assertFalse(self.content(result)["done"])
+            out = self.content(result)
+            self.assertFalse(out["done"])
+            # an app may decline without showing the form, so an unanswered question also offers the page;
+            # an explicit no does not
+            if reply["action"] == "accept":
+                self.assertNotIn("confirm_url", out)
+            else:
+                self.assertEqual(out["confirm_url"], "http://localhost/app/review/decide?approve=" + pid)
         self.assertEqual(self.db.one("SELECT state FROM proposals WHERE id=?", pid)["state"], "open")
 
     def test_an_app_that_cannot_ask_gets_a_page_with_exactly_those_decisions(self):

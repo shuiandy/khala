@@ -345,7 +345,8 @@ in every session, a conflict), `memory_scopes` says so with `waiting_for_you`, a
 at a natural break. Say yes, and the agent lists the items with `memory_review`, explains them, and passes your answer
 to `memory_decide`. Before anything changes, the server asks your app to show you a confirmation it wrote itself,
 naming every item and its version (MCP form elicitation); the model cannot answer it. Apps that cannot show one get
-a link to a page that lists exactly those decisions, applied with one click. Unattended agents cannot decide, an agent only decides what it may read and
+a link to a page that lists exactly those decisions, applied with one click. The same link comes back when the
+question is declined or dismissed, since some apps answer it without ever showing it. Unattended agents cannot decide, an agent only decides what it may read and
 change, and approved changes can be undone on the Review page for 14 days.
 
 To have fewer decisions at all, let a scope apply merges directly (on its page, or `khala consolidation SCOPE auto`):

@@ -470,7 +470,12 @@ def create_app(cfg: Config | None = None, mailer=None, local=None):
                 return {"done": False, "confirm_url": confirm_link(approve, reject, keep, reason),
                         "message": "This app cannot ask the person to confirm. Give them confirm_url: it lists "
                                    "exactly these decisions, and one click there applies them."}
-            return {"done": False, "message": "The person did not confirm, so nothing changed."}
+            # Declined or dismissed. Some apps claim the form but answer it themselves without showing it, which looks
+            # the same from here, so offer the page too.
+            return {"done": False, "confirm_url": confirm_link(approve, reject, keep, reason),
+                    "message": "The person did not confirm, so nothing changed. Some apps decline without showing the "
+                               "question: if the person says they saw none, give them confirm_url, which lists exactly "
+                               "these decisions and applies them with one click. If they did say no, leave it."}
         if not confirmation.data.confirm:
             return {"done": False, "message": "The person chose not to apply these decisions; nothing changed."}
         results = inbox.apply_decisions(p, decision_plan(p, approve, reject, keep), reason or "")
