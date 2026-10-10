@@ -17,9 +17,20 @@
   <a href="#inbox">Inbox <span class="n">{{ notes_total }}</span></a>
 </nav>
 
+{% if props or candidates %}
+<form method="get" action="/app/review/decide" id="pick"></form>
+<div class="card row">
+  <a class="button" href="{{ approve_all }}">Approve all {{ props|length + candidates|length }}</a>
+  <button form="pick" name="as" value="approve">Approve selected</button>
+  <button form="pick" name="as" value="reject" class="danger">Reject selected</button>
+  <span class="small muted">Each shows the list once more before anything changes.</span>
+</div>
+{% endif %}
+
 <section class="panel" id="proposed">
   <div class="panel-head"><h2>Proposed changes</h2></div>
   {% for p in props %}
+  <div class="pick-row"><input type="checkbox" form="pick" name="item" value="{{ p.id }}" aria-label="Select {{ p.record }}">
   <a class="row-link" href="/app/review/proposals/{{ p.id }}">
     <span class="tag {{ 'update' if p.base_blob else 'new' }}">{{ 'Update' if p.base_blob else 'New' }}</span>
     <span class="body">
@@ -28,7 +39,7 @@
       <span class="meta"><span class="scope">{{ p.scope }}</span>{% if p.old_scope and p.old_scope != p.scope %}<span>from {{ p.old_scope }}</span>{% endif %}<span>{{ from_line(p.account_id, p.agent_id) }}</span></span>
     </span>
     <span class="end nowrap">{{ p.created_at|ago }}</span>
-  </a>
+  </a></div>
   {% else %}<div class="empty">Nothing waiting.</div>{% endfor %}
 </section>
 
@@ -51,15 +62,15 @@
 <section class="panel" id="candidates">
   <div class="panel-head"><h2>To load in every session</h2><span class="small muted">Proposed records in auto-loaded scopes</span></div>
   {% for r in candidates %}
-  <div class="row-link">
+  <div class="pick-row"><input type="checkbox" form="pick" name="item" value="{{ r.name }}" aria-label="Select {{ r.name }}">
+  <a class="row-link" href="/app/records/{{ r.name }}">
     <span class="tag proposed">Proposed</span>
     <span class="body">
-      <a class="name" href="/app/records/{{ r.name }}">{{ r.name }}</a>
+      <span class="name">{{ r.name }}</span>
       <span class="desc clamp">{{ r.meta.description }}</span>
       <span class="meta"><span class="scope">{{ r.meta.scope }}</span>{% if r.meta.proposed_at %}<span>proposed {{ r.meta.proposed_at }}</span>{% endif %}</span>
     </span>
-    <form method="post" action="/app/review/candidates" class="end row"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="name" value="{{ r.name }}"><button name="action" value="approve">Approve</button><button class="danger" name="action" value="reject">Reject</button></form>
-  </div>
+  </a></div>
   {% endfor %}
   <div class="panel-foot">Approving makes a record active, so it loads in every session. Rejecting removes it; its history keeps it.</div>
 </section>

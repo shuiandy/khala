@@ -137,6 +137,18 @@ class DecisionTests(Base):
         self.assertNotIn("feedback_new.md", git(self.hub, "ls-tree", "--name-only", "main"))
         self.assertEqual(self.client.get(path).status_code, 409)       # nothing left to apply
 
+    def test_the_review_page_offers_all_or_ticked_items_through_the_same_page(self):
+        pid = self.proposal()
+        self.candidate()
+        self.web_login(OWNER)
+        page = self.client.get("/app/review").text
+        self.assertIn("Approve all 2", page)
+        self.assertIn('href="/app/review/decide?approve=%s%%2Cfeedback_new.md"' % pid, page)
+        self.assertEqual(page.count('type="checkbox" form="pick" name="item"'), 2)
+        ticked = self.client.get("/app/review/decide", params=[("as", "reject"), ("item", "feedback_new.md")]).text
+        self.assertIn("Apply 1 decision", ticked)
+        self.assertIn('name="reject" value="feedback_new.md"', ticked)
+
     def test_the_page_asks_again_when_something_changed_and_others_cannot_use_it(self):
         self.candidate()
         path = "/app/review/decide?approve=feedback_new.md"

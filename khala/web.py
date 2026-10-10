@@ -11,7 +11,7 @@ import io
 import json
 import re
 import time
-from urllib.parse import quote, urlparse
+from urllib.parse import urlencode, quote, urlparse
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -1358,9 +1358,12 @@ def make_routes(server, cfg, db, store, memory, mailer, flow, inbox, provider, d
         by_scope = {}
         for n in notes:
             by_scope[n["scope"]] = by_scope.get(n["scope"], 0) + 1
+        candidates = inbox.candidates(me)
+        everything = [r["id"] for r in props] + [r.name for r in candidates]
         return ctx.render("app_review.html", props=props, applied=applied, conflicts=conflicts, notes=notes[:100],
                           notes_total=len(notes), by_scope=sorted(by_scope.items()), who=who, now=time.time(),
-                          candidates=inbox.candidates(me))
+                          candidates=candidates, approve_all="/app/review/decide?" + urlencode(
+                              {"approve": ",".join(everything)}) if everything else "")
 
     def decision_rows(plan):
         rows = []
@@ -1386,7 +1389,9 @@ def make_routes(server, cfg, db, store, memory, mailer, flow, inbox, provider, d
         """A batch of decisions an agent relayed, for apps that cannot show a confirmation: the person sees exactly
         these items and applies them with one button. The page changes nothing until that button is pressed."""
         src = ctx.form if ctx.form is not None else ctx.request.query_params
-        lists = {k: [x for x in (src.get(k) or "").split(",") if x][:100] for k in ("approve", "reject", "keep")}
+        lists = {k: [x for v in src.getlist(k) for x in str(v).split(",") if x][:100] for k in ("approve", "reject", "keep")}
+        if src.get("as") in ("approve", "reject"):           # boxes ticked on the Review page
+            lists[src.get("as")] += [str(v) for v in src.getlist("item")][:100]
         why = (src.get("why") or "")[:300]
         try:
             plan = inbox.plan_decisions(ctx.me, lists["approve"], lists["reject"], lists["keep"])
