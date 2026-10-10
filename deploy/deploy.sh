@@ -28,6 +28,11 @@ ssh $SSH_OPTS "$DEPLOY_HOST" "set -e; sudo rm -rf /tmp/khala-src; mkdir /tmp/kha
 tar xzf /tmp/khala.tgz -C /tmp/khala-src; rm /tmp/khala.tgz
 ROOT=$DEPLOY_ROOT ETC=$DEPLOY_ETC SERVICE=$DEPLOY_SERVICE SVC_USER=$DEPLOY_USER GIT_USER=$DEPLOY_GIT_USER \
 PORT=$DEPLOY_PORT sh /tmp/khala-src/deploy/remote.sh"
+# the service needs a few seconds to start after the restart; give it up to 20 before calling it down
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  curl -fs -o /dev/null "$DEPLOY_URL/health" && break
+  sleep 2
+done
 curl -fsS -o /dev/null -w "health %{http_code}\n" "$DEPLOY_URL/health"
 curl -fsS -o /dev/null -w "web login %{http_code}\n" "$DEPLOY_URL/app/login"
 curl -fsS -o /dev/null -w "oauth metadata %{http_code}\n" "$DEPLOY_URL/.well-known/oauth-authorization-server"
